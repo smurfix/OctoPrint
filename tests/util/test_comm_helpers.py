@@ -6,7 +6,8 @@ __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agp
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import unittest
-
+import sys
+PY3 = sys.version_info[0] == 3
 from ddt import ddt, data, unpack
 
 @ddt
@@ -100,6 +101,7 @@ class TestCommHelpers(unittest.TestCase):
 		def md5sum(input):
 			import hashlib
 			m = hashlib.md5()
+			input = input.encode('utf-8') if PY3 else input
 			m.update(input)
 			return m.hexdigest()
 
@@ -267,11 +269,11 @@ class TestCommHelpers(unittest.TestCase):
 		("NAME. Malyan VER: 3.7 MODEL: M300 HW: HG01",
 		 dict(NAME="Malyan", VER="3.7", MODEL="M300", HW="HG01")),
 		("FIRMWARE_NAME:Marlin 1.1.0 From Archive SOURCE_CODE_URL:http:// ... PROTOCOL_VERSION:1.0 MACHINE_TYPE:www.cxsw3d.com EXTRUDER_COUNT:1 UUID:00000000-0000-0000-0000-000000000000",
-		 dict(FIRMWARE_NAME="Marlin 1.1.0 From Archive", 
-		      SOURCE_CODE_URL="http:// ...", 
-		      PROTOCOL_VERSION="1.0", 
-		      MACHINE_TYPE="www.cxsw3d.com", 
-		      EXTRUDER_COUNT="1", 
+		 dict(FIRMWARE_NAME="Marlin 1.1.0 From Archive",
+		      SOURCE_CODE_URL="http:// ...",
+		      PROTOCOL_VERSION="1.0",
+		      MACHINE_TYPE="www.cxsw3d.com",
+		      EXTRUDER_COUNT="1",
 		      UUID="00000000-0000-0000-0000-000000000000"))
 	)
 	@unpack

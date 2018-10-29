@@ -11,6 +11,7 @@ import glob
 
 from setuptools import Command
 from distutils.command.clean import clean as _clean
+from past.builtins import basestring
 
 
 def package_data_dirs(source, sub_folders):

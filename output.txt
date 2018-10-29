@@ -1,0 +1,77 @@
+..........................................................................................................................................................................................................................F....F.................F...........................................................F...F..................................................................................................................................................................................................................................................................................../home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/importlib/__init__.py:127: DeprecationWarning: octoprint.users is deprecated, use octoprint.access.users instead
+  return _bootstrap._gcd_import(name[level:], package, level)
+.......................................................................................................
+======================================================================
+FAIL: Built-in immutable sequence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/plugins/test_pluginmanager.py", line 46, in test_is_os_compatible
+    self.assertEqual(actual, expected)
+AssertionError: False != True
+-------------------- >> begin captured stdout << ---------------------
+CURRENT OS: linux
+ENTRIES: ['!windows']
+
+--------------------- >> end captured stdout << ----------------------
+
+======================================================================
+FAIL: Built-in immutable sequence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/plugins/test_pluginmanager.py", line 46, in test_is_os_compatible
+    self.assertEqual(actual, expected)
+AssertionError: False != True
+-------------------- >> begin captured stdout << ---------------------
+CURRENT OS: unmapped
+ENTRIES: ['linux', 'freebsd', 'sunos']
+
+--------------------- >> end captured stdout << ----------------------
+
+======================================================================
+FAIL: Built-in immutable sequence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/printer/test_estimation.py", line 74, in test_is_stable
+    self.assertEqual(self.estimation_helper.is_stable(), expected)
+AssertionError: False != True
+
+======================================================================
+FAIL: Built-in immutable sequence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/server/util/test_tornado.py", line 95, in test_extended_header_value
+    self.assertEqual(expected, actual)
+AssertionError: '£ rates' != '� rates'
+- £ rates
+? ^
++ � rates
+? ^
+
+
+======================================================================
+FAIL: Built-in immutable sequence.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv3/lib/python3.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/server/util/test_tornado.py", line 95, in test_extended_header_value
+    self.assertEqual(expected, actual)
+AssertionError: '£ rates' != '� rates'
+- £ rates
+? ^
++ � rates
+? ^
+
+
+----------------------------------------------------------------------
+Ran 685 tests in 61.771s
+
+FAILED (failures=5)

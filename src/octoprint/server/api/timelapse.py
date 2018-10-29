@@ -8,6 +8,8 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 import os
 import threading
 import logging
+import sys
+PY3 = sys.version_info[0] == 3
 
 from flask import request, jsonify, url_for, make_response
 
@@ -66,9 +68,13 @@ def _etag(unrendered, lm=None):
 
 	import hashlib
 	hash = hashlib.sha1()
-	hash.update(str(lm))
-	hash.update(repr(config))
-	hash.update(repr(_DATA_FORMAT_VERSION))
+	def hash_update(value):
+		if PY3 and isinstance(value, str):
+			value = value.encode('utf-8')
+		hash.update(value)
+	hash_update(str(lm))
+	hash_update(repr(config))
+	hash_update(repr(_DATA_FORMAT_VERSION))
 
 	return hash.hexdigest()
 
@@ -253,4 +259,3 @@ def setTimelapseConfig():
 			octoprint.timelapse.configure_timelapse(config)
 
 	return getTimelapseData()
-

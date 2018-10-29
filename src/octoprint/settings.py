@@ -32,11 +32,16 @@ import re
 import uuid
 import copy
 import time
-
+PY3 = sys.version_info[0] == 3
 # noinspection PyCompatibility
 from builtins import bytes
 # noinspection PyCompatibility
 from past.builtins import basestring
+
+if PY3:
+	from collections.abc import KeysView
+else:
+	from collections import KeysView
 
 try:
 	from collections import ChainMap
@@ -612,9 +617,7 @@ class Settings(object):
 			controls=self._process_custom_controls
 		)
 		self._set_preprocessors = dict()
-
 		self._init_basedir(basedir)
-
 		if configfile is not None:
 			self._configfile = configfile
 		else:
@@ -788,11 +791,17 @@ class Settings(object):
 				# if it's a template matcher, we need to add a key to associate with the matcher output
 				import hashlib
 				key_hash = hashlib.md5()
-				key_hash.update(result["regex"])
+				if PY3:
+					key_hash.update(result["regex"].encode('utf-8'))
+				else:
+					key_hash.update(result["regex"])
 				result["key"] = key_hash.hexdigest()
 
 				template_key_hash = hashlib.md5()
-				template_key_hash.update(result["template"])
+				if PY3:
+					template_key_hash.update(result["template"].encode('utf-8'))
+				else:
+					template_key_hash.update(result["template"])
 				result["template_key"] = template_key_hash.hexdigest()
 
 			elif "children" in result:
@@ -805,7 +814,7 @@ class Settings(object):
 
 	@property
 	def effective(self):
-		return self._map.deep_dict()
+		return list(self._map.deep_dict())
 
 	@property
 	def effective_yaml(self):
@@ -816,7 +825,10 @@ class Settings(object):
 	def effective_hash(self):
 		import hashlib
 		hash = hashlib.md5()
-		hash.update(self.effective_yaml)
+		if PY3:
+			hash.update(self.effective_yaml.encode('utf-8'))
+		else:
+			hash.update(self.effective_yaml)
 		return hash.hexdigest()
 
 	@property
@@ -828,7 +840,10 @@ class Settings(object):
 	def config_hash(self):
 		import hashlib
 		hash = hashlib.md5()
-		hash.update(self.config_yaml)
+		if PY3:
+			hash.update(self.config_yaml.encode('utf-8'))
+		else:
+			hash.update(self.config_yaml)
 		return hash.hexdigest()
 
 	@property
@@ -1106,7 +1121,11 @@ class Settings(object):
 
 			def migrateEventHook(event, command):
 				# migrate placeholders
-				command = placeholderRe.sub("{__\\1}", command)
+				self._logger.info('migrateEventHook')
+				try:
+					command = placeholderRe.sub("{__\\1}", command)
+				except:
+					self._logger.error('re.sub error')
 
 				# migrate event names
 				if event in eventNameReplacements:
@@ -1319,7 +1338,7 @@ class Settings(object):
 
 		from octoprint.util import atomic_write
 		try:
-			with atomic_write(self._configfile, "wb", prefix="octoprint-config-", suffix=".yaml", permissions=0o600, max_permissions=0o666) as configFile:
+			with atomic_write(self._configfile, prefix="octoprint-config-", suffix=".yaml", permissions=0o600, max_permissions=0o666) as configFile:
 				yaml.safe_dump(self._config, configFile, default_flow_style=False, indent=4, allow_unicode=True)
 				self._dirty = False
 		except:
@@ -1402,6 +1421,8 @@ class Settings(object):
 					value = preprocessor(value)
 
 			if do_copy:
+				if isinstance(value, KeysView):
+					value = list(value)
 				value = copy.deepcopy(value)
 
 			if asdict:
@@ -1411,7 +1432,7 @@ class Settings(object):
 
 		if not isinstance(last, (list, tuple)):
 			if asdict:
-				return results.values().pop()
+				return list(results.values()).pop()
 			else:
 				return results.pop()
 		else:
@@ -1465,7 +1486,7 @@ class Settings(object):
 			else:
 				return intValue
 		except ValueError:
-			self._logger.warn("Could not convert %r to a valid integer when getting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when getting option %r" % (value, path))
 			return None
 
 	def getFloat(self, path, **kwargs):
@@ -1486,7 +1507,7 @@ class Settings(object):
 			else:
 				return floatValue
 		except ValueError:
-			self._logger.warn("Could not convert %r to a valid integer when getting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when getting option %r" % (value, path))
 			return None
 
 	def getBoolean(self, path, **kwargs):
@@ -1502,7 +1523,7 @@ class Settings(object):
 		return value is not None
 
 	def getBaseFolder(self, type, create=True, allow_fallback=True, log_error=False, check_writable=True, deep_check_writable=False):
-		if type not in default_settings["folder"].keys() + ["base"]:
+		if type not in list(default_settings["folder"].keys()) + ["base"]:
 			return None
 
 		if type == "base":
@@ -1794,7 +1815,8 @@ def _validate_folder(folder, create=True, check_writable=True, deep_check_writab
 			# to determine whether things are *actually* writable
 			testfile = os.path.join(folder, ".testballoon.txt")
 			try:
-				with open(testfile, "wb") as f:
+				file_mode = "w" if PY3 else "wb"
+				with open(testfile, file_mode) as f:
 					f.write("test")
 				os.remove(testfile)
 			except:

@@ -33,6 +33,8 @@ from collections import defaultdict, namedtuple, OrderedDict
 import logging
 import fnmatch
 import inspect
+import sys
+PY3 = sys.version_info[0] == 3
 
 import pkg_resources
 import pkginfo
@@ -264,7 +266,6 @@ class PluginInfo(object):
 		Returns:
 		    callable or None: Handler for the requested ``hook`` or None if no handler is registered.
 		"""
-
 		if not hook in self.hooks:
 			return None
 		return self.hooks[hook]
@@ -884,7 +885,6 @@ class PluginManager(object):
 		self.logger.info("Loading plugins from {folders} and installed plugin packages...".format(
 			folders=", ".join(map(lambda x: x[0] if isinstance(x, tuple) else str(x), self.plugin_folders))
 		))
-
 		if force_reload is None:
 			force_reload = []
 
@@ -892,7 +892,10 @@ class PluginManager(object):
 		                                 incl_all_found=True)
 
 		# let's clean everything we DIDN'T find first
-		removed = [key for key in self.enabled_plugins.keys() + self.disabled_plugins.keys() if key not in found]
+		if PY3:
+			removed = [key for key in list(self.enabled_plugins.keys()) + list(self.disabled_plugins.keys()) if key not in found]
+		else:
+			removed = [key for key in self.enabled_plugins.keys() + self.disabled_plugins.keys() if key not in found]
 		for key in removed:
 			try:
 				del self.enabled_plugins[key]
@@ -903,7 +906,6 @@ class PluginManager(object):
 				del self.disabled_plugins[key]
 			except KeyError:
 				pass
-
 		self.disabled_plugins.update(added)
 
 		# 1st pass: loading the plugins
@@ -919,7 +921,6 @@ class PluginManager(object):
 		self.on_plugins_loaded(startup=startup,
 							   initialize_implementations=initialize_implementations,
 							   force_reload=force_reload)
-
 		# 2nd pass: enabling those plugins that need enabling
 		for name, plugin in added.items():
 			try:
@@ -929,10 +930,14 @@ class PluginManager(object):
 						continue
 					self.enable_plugin(name, plugin=plugin, initialize_implementation=initialize_implementations, startup=startup)
 			except PluginNeedsRestart:
+				print('PluginNeedsRestart')
 				pass
 			except PluginLifecycleException as e:
+				print('PluginLifecycleException')
 				self.logger.info(str(e))
-
+			except:
+				print('Unkown exception')
+		print('Reload plugins')
 		self.on_plugins_enabled(startup=startup,
 								initialize_implementations=initialize_implementations,
 								force_reload=force_reload)
@@ -1362,7 +1367,7 @@ class PluginManager(object):
 	def log_all_plugins(self, show_bundled=True, bundled_str=(" (bundled)", ""), show_location=True,
 	                    location_str=" = {location}", show_enabled=True, enabled_str=(" ", "!", "#"),
 	                    only_to_handler=None):
-		all_plugins = self.enabled_plugins.values() + self.disabled_plugins.values()
+		all_plugins = list(self.enabled_plugins.values()) + list(self.disabled_plugins.values())
 
 		def _log(message, level=logging.INFO):
 			if only_to_handler is not None:

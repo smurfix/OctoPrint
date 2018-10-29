@@ -5,6 +5,9 @@ __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
+import sys
+PY3 = sys.version_info[0] == 3
+
 from flask import request, jsonify, make_response, url_for
 from werkzeug.exceptions import BadRequest
 
@@ -40,7 +43,11 @@ def _etag(configured, lm=None):
 
 	import hashlib
 	hash = hashlib.sha1()
-	hash.update(str(lm))
+	def hash_update(value):
+		if PY3 and isinstance(value, str):
+			value = value.encode('utf-8')
+		hash.update(value)
+	hash_update(str(lm))
 
 	if configured:
 		slicers = slicingManager.configured_slicers
@@ -51,11 +58,11 @@ def _etag(configured, lm=None):
 
 	for slicer in sorted(slicers):
 		slicer_impl = slicingManager.get_slicer(slicer, require_configured=False)
-		hash.update(slicer)
-		hash.update(str(slicer_impl.is_slicer_configured()))
-		hash.update(str(slicer == default_slicer))
+		hash_update(slicer)
+		hash_update(str(slicer_impl.is_slicer_configured()))
+		hash_update(str(slicer == default_slicer))
 
-	hash.update(_DATA_FORMAT_VERSION) # increment version if we change the API format
+	hash_update(_DATA_FORMAT_VERSION) # increment version if we change the API format
 
 	return hash.hexdigest()
 

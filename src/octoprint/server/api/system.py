@@ -74,7 +74,7 @@ def executeSystemCommand(source, command):
 	if not "command" in command_spec:
 		return make_response("Command {}:{} does not define a command to execute, can't proceed".format(source, command), 500)
 
-	do_async = command_spec.get("async", False)
+	do_async = command_spec.get("do_async", False)
 	do_ignore = command_spec.get("ignore", False)
 	debug = command_spec.get("debug", False)
 
@@ -189,7 +189,7 @@ def _get_core_command_specs():
 			continue
 		spec.update(dict(action=action,
 		                 source="core",
-		                 async=True,
+		                 do_async=True,
 		                 debug=True))
 		available_commands[action] = spec
 	return available_commands

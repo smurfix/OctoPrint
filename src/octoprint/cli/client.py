@@ -6,6 +6,7 @@ __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms
 
 import click
 import json
+from past.builtins import basestring
 
 import octoprint_client
 
@@ -163,10 +164,10 @@ def post_from_file(ctx, path, file_path, json_flag, yaml_flag, timeout):
 @client.command("command")
 @click.argument("path")
 @click.argument("command")
-@click.option("--str", "-s", "str_params", multiple=True, nargs=2, type=click.Tuple([unicode, unicode]))
-@click.option("--int", "-i", "int_params", multiple=True, nargs=2, type=click.Tuple([unicode, int]))
-@click.option("--float", "-f", "float_params", multiple=True, nargs=2, type=click.Tuple([unicode, float]))
-@click.option("--bool", "-b", "bool_params", multiple=True, nargs=2, type=click.Tuple([unicode, bool]))
+@click.option("--str", "-s", "str_params", multiple=True, nargs=2, type=click.Tuple([basestring, basestring]))
+@click.option("--int", "-i", "int_params", multiple=True, nargs=2, type=click.Tuple([basestring, int]))
+@click.option("--float", "-f", "float_params", multiple=True, nargs=2, type=click.Tuple([basestring, float]))
+@click.option("--bool", "-b", "bool_params", multiple=True, nargs=2, type=click.Tuple([basestring, bool]))
 @click.option("--timeout", type=float, default=None, help="Request timeout in seconds")
 @click.pass_context
 def command(ctx, path, command, str_params, int_params, float_params, bool_params, timeout):
@@ -182,7 +183,7 @@ def command(ctx, path, command, str_params, int_params, float_params, bool_param
 @client.command("upload")
 @click.argument("path")
 @click.argument("file_path", type=click.Path(exists=True, dir_okay=False, resolve_path=True))
-@click.option("--parameter", "-P", "params", multiple=True, nargs=2, type=click.Tuple([unicode, unicode]))
+@click.option("--parameter", "-P", "params", multiple=True, nargs=2, type=click.Tuple([basestring, basestring]))
 @click.option("--file-name", type=click.STRING)
 @click.option("--content-type", type=click.STRING)
 @click.option("--timeout", type=float, default=None, help="Request timeout in seconds")

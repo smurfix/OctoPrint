@@ -18,6 +18,8 @@ import yaml
 import hashlib
 import ddt
 import time
+import sys
+PY3 = sys.version_info[0] == 3
 
 import octoprint.settings
 
@@ -215,10 +217,13 @@ class TestSettings(unittest.TestCase):
 			data = settings.get(["devel", "virtualPrinter"], merged=True)
 
 			self.assertGreater(len(data), 1)
-			self.assertDictContainsSubset(dict(enabled=True,
-			                                   sendWait=True,
-			                                   waitInterval=1.0),
-			                              data)
+			self.assertTrue(dict(enabled=True,
+	                             sendWait=True,
+	                             waitInterval=1.0).items() <= data.items())
+			# self.assertDictContainsSubset(dict(enabled=True,
+			#                                    sendWait=True,
+			#                                    waitInterval=1.0),
+			#                               data)
 
 	def test_get_multiple(self):
 		with self.mocked_config():
@@ -435,7 +440,7 @@ class TestSettings(unittest.TestCase):
 	def test_effective_hash(self):
 		with self.mocked_config():
 			hash = hashlib.md5()
-			hash.update(yaml.safe_dump(self.expected_effective))
+			hash.update(yaml.safe_dump(self.expected_effective).encode('utf-8'))
 			expected_effective_hash = hash.hexdigest()
 			print(yaml.safe_dump(self.expected_effective))
 
@@ -448,7 +453,7 @@ class TestSettings(unittest.TestCase):
 	def test_config_hash(self):
 		with self.mocked_config():
 			hash = hashlib.md5()
-			hash.update(yaml.safe_dump(self.config))
+			hash.update(yaml.safe_dump(self.config).encode('utf-8'))
 			expected_config_hash = hash.hexdigest()
 
 			settings = octoprint.settings.Settings()
@@ -503,10 +508,12 @@ class TestSettings(unittest.TestCase):
 			self.assertEqual("0.0.0.0", settings.get(["server", "host"]))
 
 			# modify yaml file externally
-			with open(configfile, "r+b") as f:
+			file_mode = "r" if PY3 else "r+b"
+			with open(configfile, file_mode) as f:
 				config = yaml.safe_load(f)
 			config["server"]["host"] = "127.0.0.1"
-			with open(configfile, "w+b") as f:
+			file_mode = "w" if PY3 else "w+b"
+			with open(configfile, file_mode) as f:
 				yaml.safe_dump(config, f)
 
 			# set some value, should also reload file before setting new api key

@@ -370,7 +370,6 @@ def init_pluginsystem(settings, safe_mode=False, ignore_blacklist=True, connecti
 	                    plugin_disabled_list=plugin_disabled_list,
 	                    plugin_blacklist=plugin_blacklist,
 	                    plugin_validators=plugin_validators)
-
 	settings_overlays = dict()
 	disabled_from_overlays = dict()
 
@@ -425,7 +424,9 @@ def init_pluginsystem(settings, safe_mode=False, ignore_blacklist=True, connecti
 	pm.on_plugin_loaded = handle_plugin_loaded
 	pm.on_plugins_loaded = handle_plugins_loaded
 	pm.on_plugin_enabled = handle_plugin_enabled
+	print('reload_plugins')
 	pm.reload_plugins(startup=True, initialize_implementations=False)
+	print('plugin init done')
 	return pm
 
 

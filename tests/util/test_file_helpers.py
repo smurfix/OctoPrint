@@ -9,7 +9,7 @@ import mock
 import os
 import ddt
 import sys
-
+PY3 = sys.version_info[0] == 3
 import octoprint.util
 
 class BomAwareOpenTest(unittest.TestCase):
@@ -95,12 +95,14 @@ class TestAtomicWrite(unittest.TestCase):
 		mock_exists.return_value = False
 
 		# test
+		test_string = b'test' if PY3 else 'test'
 		with octoprint.util.atomic_write("somefile.yaml") as f:
-			f.write("test")
+			f.write(test_string)
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
-		mock_file.write.assert_called_once_with("test")
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
+		mock_file.write.assert_called_once_with(test_string)
 		mock_file.close.assert_called_once_with()
 		mock_chmod.assert_called_once_with("tempfile.tmp", 0o644)
 		mock_move.assert_called_once_with("tempfile.tmp", "somefile.yaml")
@@ -128,7 +130,8 @@ class TestAtomicWrite(unittest.TestCase):
 			pass
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
 		mock_file.close.assert_called_once_with()
 		self.assertFalse(mock_move.called)
 		self.assertFalse(mock_chmod.called)
@@ -155,7 +158,8 @@ class TestAtomicWrite(unittest.TestCase):
 			pass
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
 		mock_file.close.assert_called_once_with()
 		self.assertTrue(mock_move.called)
 		self.assertTrue(mock_chmod.called)
@@ -202,7 +206,8 @@ class TestAtomicWrite(unittest.TestCase):
 			f.write("test")
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
 		mock_file.close.assert_called_once_with()
 		mock_chmod.assert_called_once_with("tempfile.tmp", 0o755)
 		mock_move.assert_called_once_with("tempfile.tmp", "somefile.yaml")
@@ -230,7 +235,8 @@ class TestAtomicWrite(unittest.TestCase):
 			f.write("test")
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
 		mock_file.close.assert_called_once_with()
 		mock_chmod.assert_called_once_with("tempfile.tmp", 0o777) # 0o755 | 0o666
 		mock_move.assert_called_once_with("tempfile.tmp", "somefile.yaml")
@@ -258,7 +264,8 @@ class TestAtomicWrite(unittest.TestCase):
 			f.write("test")
 
 		# assert
-		mock_tempfile.assert_called_once_with(mode="w+b", prefix="tmp", suffix="", delete=False)
+		file_mode = "w" if PY3 else "w+b"
+		mock_tempfile.assert_called_once_with(mode=file_mode, prefix="tmp", suffix="", delete=False)
 		mock_file.close.assert_called_once_with()
 		mock_chmod.assert_called_once_with("tempfile.tmp", 0o644) # (0o600 | 0o755) & 0o666 = 0o755 & 0o666
 		mock_move.assert_called_once_with("tempfile.tmp", "somefile.yaml")
@@ -334,7 +341,8 @@ class IsHiddenPathTest(unittest.TestCase):
 
 		for attr in ("path_always_visible", "path_hidden_on_windows", "path_always_hidden"):
 			path = getattr(self, attr)
-			with open(path, "w+b") as f:
+			file_mode = "w" if PY3 else "w+b"
+			with open(path, file_mode) as f:
 				f.write(attr)
 
 		import sys
@@ -370,10 +378,10 @@ except ImportError:
 	class GlobEscapeTest(unittest.TestCase):
 		"""
 		Ported from Python 3.4
-		
+
 		See https://github.com/python/cpython/commit/fd32fffa5ada8b8be8a65bd51b001d989f99a3d3
 		"""
-		
+
 		@ddt.data(
 			("abc", "abc"),
 			("[", "[[]"),
@@ -386,7 +394,7 @@ except ImportError:
 		def test_glob_escape(self, text, expected):
 			actual = octoprint.util.glob_escape(text)
 			self.assertEqual(actual, expected)
-	
+
 		@ddt.data(
 			("?:?", "?:[?]"),
 			("*:*", "*:[*]"),

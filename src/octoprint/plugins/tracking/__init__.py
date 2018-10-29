@@ -151,19 +151,21 @@ class TrackingPlugin(octoprint.plugin.SettingsPlugin,
 	def _track_startup(self):
 		if not self._settings.get_boolean(["events", "startup"]):
 			return
-
+		# TODO: all strings was previously in bytes format
+		# Need to be sure this won't break on py2
+		# self._logger.info('Environment: %s', self._environment)
 		payload = dict(version=get_octoprint_version_string(),
-		               os=self._environment[b"os"][b"id"],
-		               python=self._environment[b"python"][b"version"],
-		               pip=self._environment[b"python"][b"pip"],
-		               cores=self._environment[b"hardware"][b"cores"],
-		               freq=self._environment[b"hardware"][b"freq"],
-		               ram=self._environment[b"hardware"][b"ram"])
+		               os=self._environment["os"]["id"],
+		               python=self._environment["python"]["version"],
+		               pip=self._environment["python"]["pip"],
+		               cores=self._environment["hardware"]["cores"],
+		               freq=self._environment["hardware"]["freq"],
+		               ram=self._environment["hardware"]["ram"])
 
-		if b"plugins" in self._environment and b"pi_support" in self._environment[b"plugins"]:
-			payload[b"pi_model"] = self._environment[b"plugins"][b"pi_support"][b"model"]
-			if b"octopi_version" in self._environment[b"plugins"][b"pi_support"]:
-				payload[b"octopi_version"] = self._environment[b"plugins"][b"pi_support"][b"octopi_version"]
+		if "plugins" in self._environment and "pi_support" in self._environment["plugins"]:
+			payload["pi_model"] = self._environment["plugins"]["pi_support"]["model"]
+			if "octopi_version" in self._environment["plugins"]["pi_support"]:
+				payload["octopi_version"] = self._environment["plugins"]["pi_support"]["octopi_version"]
 
 		self._track("startup", **payload)
 
@@ -178,13 +180,13 @@ class TrackingPlugin(octoprint.plugin.SettingsPlugin,
 			return
 
 		if event.endswith("_installplugin"):
-			self._track("install_plugin", plugin=payload.get(b"id"), plugin_version=payload.get(b"version"))
+			self._track("install_plugin", plugin=payload.get("id"), plugin_version=payload.get("version"))
 		elif event.endswith("_uninstallplugin"):
-			self._track("uninstall_plugin", plugin=payload.get(b"id"), plugin_version=payload.get(b"version"))
+			self._track("uninstall_plugin", plugin=payload.get("id"), plugin_version=payload.get("version"))
 		elif event.endswith("_enableplugin"):
-			self._track("enable_plugin", plugin=payload.get(b"id"), plugin_version=payload.get(b"version"))
+			self._track("enable_plugin", plugin=payload.get("id"), plugin_version=payload.get("version"))
 		elif event.endswith("_disableplugin"):
-			self._track("disable_plugin", plugin=payload.get(b"id"), plugin_version=payload.get(b"version"))
+			self._track("disable_plugin", plugin=payload.get("id"), plugin_version=payload.get("version"))
 
 	def _track_update_event(self, event, payload):
 		if not self._settings.get_boolean(["events", "update"]):

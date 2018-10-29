@@ -14,6 +14,8 @@ import os
 import re
 import time
 import threading
+import sys
+PY3 = sys.version_info[0] == 3
 
 import feedparser
 import flask
@@ -191,14 +193,18 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 		def etag():
 			import hashlib
 			hash = hashlib.sha1()
-			hash.update(repr(sorted(enabled)))
-			hash.update(repr(sorted(forced)))
-			hash.update(OCTOPRINT_VERSION)
+			def hash_update(value):
+				if PY3 and isinstance(value, str):
+					value = value.encode('utf-8')
+				hash.update(value)
+			hash_update(repr(sorted(enabled)))
+			hash_update(repr(sorted(forced)))
+			hash_update(OCTOPRINT_VERSION)
 
 			for channel in sorted(channel_configs.keys()):
-				hash.update(repr(channel_configs[channel]))
+				hash_update(repr(channel_configs[channel]))
 				channel_data = self._get_channel_data_from_cache(channel, channel_configs[channel])
-				hash.update(repr(channel_data))
+				hash_update(repr(channel_data))
 
 			return hash.hexdigest()
 

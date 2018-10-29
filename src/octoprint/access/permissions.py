@@ -5,7 +5,7 @@ __author__ = "Marc Hannappel <salandora@gmail.com>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
 __copyright__ = "Copyright (C) 2017 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
-
+from future.utils import with_metaclass
 from flask import g, abort
 from flask_babel import gettext
 from flask_principal import Permission, PermissionDenied, RoleNeed, Need
@@ -249,8 +249,8 @@ class PermissionsMetaClass(type):
 		return None
 
 
-class Permissions(object):
-	__metaclass__ = PermissionsMetaClass
+class Permissions(with_metaclass(PermissionsMetaClass)):
+	# __metaclass__ = PermissionsMetaClass
 
 	# Special permission
 	ADMIN                  = OctoPrintPermission("Admin",

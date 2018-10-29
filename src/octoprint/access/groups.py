@@ -241,7 +241,7 @@ class FilebasedGroupManager(GroupManager):
 		data = dict(groups=groups,
 		            tracked=[x.key for x in Permissions.all()])
 
-		with atomic_write(self._groupfile, "wb", permissions=0o600, max_permissions=0o666) as f:
+		with atomic_write(self._groupfile, permissions=0o600, max_permissions=0o666) as f:
 			import yaml
 			yaml.safe_dump(data, f, default_flow_style=False, indent=4, allow_unicode=True)
 			self._dirty = False

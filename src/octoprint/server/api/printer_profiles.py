@@ -7,6 +7,8 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 
 
 import copy
+import sys
+PY3 = sys.version_info[0] == 3
 
 from flask import jsonify, make_response, request, url_for
 from werkzeug.exceptions import BadRequest
@@ -30,9 +32,13 @@ def _etag(lm=None):
 
 	import hashlib
 	hash = hashlib.sha1()
-	hash.update(str(lm))
-	hash.update(repr(printerProfileManager.get_default()))
-	hash.update(repr(printerProfileManager.get_current()))
+	def hash_update(value):
+		if PY3 and isinstance(value, str):
+			value = value.encode('utf-8')
+		hash.update(value)
+	hash_update(str(lm))
+	hash_update(repr(printerProfileManager.get_default()))
+	hash_update(repr(printerProfileManager.get_current()))
 	return hash.hexdigest()
 
 

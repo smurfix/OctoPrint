@@ -6,6 +6,8 @@ __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agp
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import base64
+import sys
+PY3 = sys.version_info[0] == 3
 
 from octoprint.settings import settings
 import octoprint.timelapse
@@ -269,5 +271,8 @@ def get_plugin_hash():
 
 	import hashlib
 	plugin_hash = hashlib.sha1()
-	plugin_hash.update(",".join(ui_plugins))
+	if PY3:
+		plugin_hash.update(",".join(ui_plugins).encode('utf-8'))
+	else:
+		plugin_hash.update(",".join(ui_plugins))
 	return plugin_hash.hexdigest()

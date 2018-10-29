@@ -40,5 +40,7 @@ class PluginManagerPluginTests(unittest.TestCase):
 	@ddt.unpack
 	def test_is_os_compatible(self, current_os, sys_platform, entries, expected):
 		with mock.patch("sys.platform", sys_platform):
+			print('CURRENT OS: ' + current_os)
+			print('ENTRIES: %s' % entries)
 			actual = PluginManagerPlugin._is_os_compatible(current_os, entries)
 			self.assertEqual(actual, expected)

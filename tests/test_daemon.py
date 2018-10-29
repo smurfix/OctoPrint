@@ -3,6 +3,9 @@ from __future__ import absolute_import, division, print_function
 
 import unittest
 import mock
+import sys
+PY3 = sys.version_info[0] == 3
+builtins_open = "builtins.open" if PY3 else "__builtin__.open"
 
 import octoprint.daemon
 
@@ -102,7 +105,7 @@ class DaemonTest(unittest.TestCase):
 	@mock.patch("sys.stdout")
 	@mock.patch("sys.stderr")
 	@mock.patch("os.devnull")
-	@mock.patch("__builtin__.open")
+	@mock.patch(builtins_open)
 	@mock.patch("os.dup2")
 	def test_redirect_io(self, mock_dup2, mock_open, mock_devnull, mock_stderr, mock_stdout, mock_stdin):
 		# setup
@@ -390,7 +393,7 @@ class DaemonTest(unittest.TestCase):
 		pid = 1234
 
 		# test
-		with mock.patch("__builtin__.open", mock.mock_open(read_data="{}\n".format(pid)), create=True) as m:
+		with mock.patch(builtins_open, mock.mock_open(read_data="{}\n".format(pid)), create=True) as m:
 			result = self.daemon.get_pid()
 
 		# assert
@@ -403,7 +406,7 @@ class DaemonTest(unittest.TestCase):
 		handle.__enter__.side_effect = IOError()
 
 		# test
-		with mock.patch("__builtin__.open", mock.mock_open(), create=True) as m:
+		with mock.patch(builtins_open, mock.mock_open(), create=True) as m:
 			result = self.daemon.get_pid()
 
 		# assert
@@ -415,7 +418,7 @@ class DaemonTest(unittest.TestCase):
 		pid = "not an integer"
 
 		# test
-		with mock.patch("__builtin__.open", mock.mock_open(read_data="{}\n".format(pid)), create=True) as m:
+		with mock.patch(builtins_open, mock.mock_open(read_data="{}\n".format(pid)), create=True) as m:
 			result = self.daemon.get_pid()
 
 		# assert
@@ -427,7 +430,7 @@ class DaemonTest(unittest.TestCase):
 		pid = "1234"
 
 		# test
-		with mock.patch("__builtin__.open", mock.mock_open(), create=True) as m:
+		with mock.patch(builtins_open, mock.mock_open(), create=True) as m:
 			self.daemon.set_pid(pid)
 
 		# assert
@@ -440,7 +443,7 @@ class DaemonTest(unittest.TestCase):
 		pid = 1234
 
 		# test
-		with mock.patch("__builtin__.open", mock.mock_open(), create=True) as m:
+		with mock.patch(builtins_open, mock.mock_open(), create=True) as m:
 			self.daemon.set_pid(pid)
 
 		# assert

@@ -23,6 +23,8 @@ import logging
 import netaddr
 import os
 import collections
+import sys
+PY3 = sys.version_info[0] == 3
 
 from octoprint.settings import settings
 from octoprint.util import deprecated
@@ -832,7 +834,7 @@ class PreemptiveCache(object):
 
 		with self._lock:
 			try:
-				with atomic_write(self.cachefile, "wb", max_permissions=0o666) as handle:
+				with atomic_write(self.cachefile, max_permissions=0o666) as handle:
 					yaml.safe_dump(data, handle,default_flow_style=False, indent=4, allow_unicode=True)
 			except:
 				self._logger.exception("Error while writing {}".format(self.cachefile))
@@ -1027,7 +1029,9 @@ def check_lastmodified(lastmodified):
 		return False
 
 	from datetime import datetime
-	if isinstance(lastmodified, (int, long, float, complex)):
+	# if PY3:
+	_long = int if PY3 else long
+	if isinstance(lastmodified, (int, _long, float, complex)):
 		lastmodified = datetime.fromtimestamp(lastmodified).replace(microsecond=0)
 
 	if not isinstance(lastmodified, datetime):

@@ -7,22 +7,36 @@ import os
 import versioneer
 
 import sys
+PY3 = sys.version_info[0] == 3
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "src"))
 import octoprint_setuptools
 
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Requirements for our application
-INSTALL_REQUIRES = [
-	"flask>=0.12,<0.13",
-	"werkzeug>=0.11.1,<0.12",
-	"tornado==4.5.3",
-	"Jinja2>=2.8.1,<2.9", # Jinja 2.9 has breaking changes WRT template scope - we can't
+FLASK_VERSION_STRING = "flask>=0.12,<0.13"
+JINJA_VERSION_STRING = "Jinja2>=2.8.1,<2.9", # Jinja 2.9 has breaking changes WRT template scope - we can't
 	                    # guarantee backwards compatibility for plugins and such with that
 	                    # version, hence we need to pin to a lower version for now. See #1697
+PYYAML_VERSION_STRING = "PyYAML>=3.12,<3.13"
+WERKZEUG_VERSION_STRING = "werkzeug>=0.11.1,<0.12"
+NOSE_VERSION_STRING = "nose>=1.3.0,<1.4"
+
+if PY3:
+	FLASK_VERSION_STRING = "flask>=1.0.2"
+	PYYAML_VERSION_STRING = "PyYAML>=3.13"
+	JINJA_VERSION_STRING = "Jinja2>=2.10"
+	WERKZEUG_VERSION_STRING = "werkzeug>=0.14"
+	NOSE_VERSION_STRING = "nose>=1.3.7"
+INSTALL_REQUIRES = [
+	FLASK_VERSION_STRING,
+	WERKZEUG_VERSION_STRING,
+	"tornado==4.5.3",
+	JINJA_VERSION_STRING,
 	#"sockjs-tornado>=1.0.3,<1.1", # current version is incompatible to tornado 5, we use a
 	                               # vendored one
-	"PyYAML>=3.12,<3.13",
+	PYYAML_VERSION_STRING,
 	"Flask-Login>=0.4,<0.5",
 	"Flask-Principal>=0.4,<0.5",
 	"Flask-Babel>=0.11,<0.12",
@@ -63,7 +77,7 @@ EXTRA_REQUIRES = dict(
 	develop=[
 		# Testing dependencies
 		"mock>=2.0.0,<3",
-		"nose>=1.3.0,<1.4",
+		NOSE_VERSION_STRING,
 		"ddt",
 
 		# Documentation dependencies

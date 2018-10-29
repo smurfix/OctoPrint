@@ -8,6 +8,8 @@ __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms
 import os
 import datetime
 import codecs
+import sys
+PY3 = sys.version_info[0] == 3
 
 from past.builtins import basestring
 
@@ -293,13 +295,17 @@ def index():
 
 			import hashlib
 			hash = hashlib.sha1()
-			hash.update(octoprint.__version__)
-			hash.update(octoprint.server.UI_API_KEY)
-			hash.update(",".join(sorted(files)))
+			def hash_update(value):
+				if PY3 and isinstance(value, str):
+					value = value.encode('utf-8')
+				hash.update(value)
+			hash_update(octoprint.__version__)
+			hash_update(octoprint.server.UI_API_KEY)
+			hash_update(",".join(sorted(files)))
 			if lastmodified:
-				hash.update(lastmodified)
+				hash_update(lastmodified)
 			for add in additional:
-				hash.update(str(add))
+				hash_update(str(add))
 			return hash.hexdigest()
 
 		decorated_view = view
@@ -902,9 +908,13 @@ def _compute_etag_for_i18n(locale, domain, files=None, lastmodified=None):
 
 	import hashlib
 	hash = hashlib.sha1()
-	hash.update(",".join(sorted(files)))
+	def hash_update(value):
+		if PY3 and isinstance(value, str):
+			value = value.encode('utf-8')
+		hash.update(value)
+	hash_update(",".join(sorted(files)))
 	if lastmodified:
-		hash.update(lastmodified)
+		hash_update(lastmodified)
 	return hash.hexdigest()
 
 

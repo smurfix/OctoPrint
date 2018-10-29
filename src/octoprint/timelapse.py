@@ -36,7 +36,8 @@ try:
 except ImportError:
 	from scandir import scandir
 
-
+import sys
+PY3 = sys.version_info[0] == 3
 # currently configured timelapse
 current = None
 
@@ -645,8 +646,8 @@ class Timelapse(object):
 			                 timeout=self._snapshot_timeout,
 			                 verify=self._snapshot_validate_ssl)
 			r.raise_for_status()
-
-			with open (filename, "wb") as f:
+			file_mode = "w" if PY3 else "wb"
+			with open (filename, file_mode) as f:
 				for chunk in r.iter_content(chunk_size=1024):
 					if chunk:
 						f.write(chunk)

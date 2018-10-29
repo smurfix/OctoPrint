@@ -12,6 +12,8 @@ import octoprint.vendor.sockjs.tornado.session
 import octoprint.vendor.sockjs.tornado.proto
 import octoprint.vendor.sockjs.tornado.util
 import time
+import sys
+PY3 = sys.version_info[0] == 3
 
 import octoprint.timelapse
 import octoprint.server
@@ -131,7 +133,10 @@ class PrinterStateConnection(octoprint.vendor.sockjs.tornado.SockJSConnection,
 
 		import hashlib
 		plugin_hash = hashlib.md5()
-		plugin_hash.update(",".join(ui_plugins))
+		if PY3:
+			plugin_hash.update(",".join(ui_plugins).encode('utf-8'))
+		else:
+			plugin_hash.update(",".join(ui_plugins))
 
 		config_hash = settings().config_hash
 

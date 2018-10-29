@@ -9,6 +9,8 @@ import unittest
 import os
 import mock
 import os.path
+import sys
+PY3 = sys.version_info[0] == 3
 
 from ddt import ddt, unpack, data
 
@@ -84,7 +86,8 @@ class LocalStorageTest(unittest.TestCase):
 		stl_metadata = self.storage.get_metadata(stl_name)
 
 		self.assertIsNotNone(stl_metadata)
-		self.assertDictContainsSubset(dict(display=u"bp_cäse.stl"), stl_metadata)
+		self.assertTrue(dict(display=u"bp_cäse.stl").items() <= stl_metadata.items())
+		# self.assertDictContainsSubset(dict(display=u"bp_cäse.stl"), stl_metadata)
 
 	def test_add_file_with_web(self):
 		import time
@@ -209,7 +212,8 @@ class LocalStorageTest(unittest.TestCase):
 
 		self.assertIsNotNone(before_metadata)
 		self.assertIsNotNone(after_metadata)
-		self.assertDictContainsSubset(dict(display=u"bp_cäse.stl"), after_metadata)
+		self.assertTrue(dict(display=u"bp_cäse.stl").items() <= after_metadata.items())
+		# self.assertDictContainsSubset(dict(display=u"bp_cäse.stl"), after_metadata)
 
 	@data("copy_file", "move_file")
 	def test_copy_move_file_different_display(self, operation):
@@ -269,7 +273,8 @@ class LocalStorageTest(unittest.TestCase):
 		self._add_and_verify_folder("test", "test", display=u"täst")
 		metadata = self.storage.get_metadata("test")
 		self.assertIsNotNone(metadata)
-		self.assertDictContainsSubset(dict(display=u"täst"), metadata)
+		self.assertTrue(dict(display=u"täst").items() <= metadata.items())
+		# self.assertDictContainsSubset(dict(display=u"täst"), metadata)
 
 	def test_add_subfolder(self):
 		folder_name = self._add_and_verify_folder("folder with some spaces", "folder_with_some_spaces")
@@ -571,7 +576,7 @@ class LocalStorageTest(unittest.TestCase):
 			self.storage.sanitize_name(input)
 			self.fail("expected a ValueError")
 		except ValueError as e:
-			self.assertEqual("name must not contain / or \\", e.message)
+			self.assertEqual("name must not contain / or \\", e.args[0])
 
 	@data(
 		("folder/with/subfolder", "/folder/with/subfolder"),
@@ -594,7 +599,8 @@ class LocalStorageTest(unittest.TestCase):
 			self.storage.sanitize_path(input)
 			self.fail("expected a ValueError")
 		except ValueError as e:
-			self.assertTrue(e.message.startswith("path not contained in base folder: "))
+			err_msg = e.args[0] if PY3 else e.message
+			self.assertTrue(err_msg.startswith("path not contained in base folder: "))
 
 	@data(
 		("some/folder/and/some file.gco", "/some/folder/and", "some_file.gco"),
@@ -652,7 +658,8 @@ class LocalStorageTest(unittest.TestCase):
 
 		# prepare
 		import yaml
-		with open(yaml_path, "wb") as f:
+		file_mode = "w" if PY3 else "wb"
+		with open(yaml_path, file_mode) as f:
 			yaml.safe_dump(metadata, f)
 
 		# migrate
@@ -719,4 +726,3 @@ class LocalStorageTest(unittest.TestCase):
 		sanitized_path = self.storage.add_folder(path, display=display)
 		self.assertTrue(os.path.isdir(os.path.join(self.basefolder, os.path.join(*sanitized_path.split("/")))))
 		return sanitized_path
-

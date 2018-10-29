@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 def warning_decorator_factory(warning_type):
 	def specific_warning(message, stacklevel=1, since=None, includedoc=None, extenddoc=False):
 		def decorator(func):
+			func.__qualname__ = 'warning_decorator_factory'
+			func.__annotations__ = dict()
 			@wraps(func)
 			def func_wrapper(*args, **kwargs):
 				# we need to increment the stacklevel by one because otherwise we'll get the location of our
@@ -51,7 +53,6 @@ def warning_decorator_factory(warning_type):
 				if extenddoc and hasattr(func_wrapper, "__doc__") and func_wrapper.__doc__ is not None:
 					docstring = func_wrapper.__doc__ + "\n" + docstring
 				func_wrapper.__doc__ = docstring
-
 			return func_wrapper
 
 		return decorator
@@ -683,7 +684,7 @@ def dict_minimal_mergediff(source, target):
 
 	from copy import deepcopy
 
-	all_keys = set(source.keys() + target.keys())
+	all_keys = set(list(source.keys()) + list(target.keys()))
 	result = dict()
 	for k in all_keys:
 		if k not in target:
@@ -959,11 +960,12 @@ def mime_type_matches(mime, other):
 	return type_matches and subtype_matches
 
 @contextlib.contextmanager
-def atomic_write(filename, mode="w+b", prefix="tmp", suffix="", permissions=0o644, max_permissions=0o777):
+def atomic_write(filename, mode=None, prefix="tmp", suffix="", permissions=0o644, max_permissions=0o777):
 	if os.path.exists(filename):
 		permissions |= os.stat(filename).st_mode
 	permissions &= max_permissions
-
+	if mode is None:
+		mode = "w" if PY3 else "w+b"
 	temp_config = tempfile.NamedTemporaryFile(mode=mode, prefix=prefix, suffix=suffix, delete=False)
 	try:
 		yield temp_config

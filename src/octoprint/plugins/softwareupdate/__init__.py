@@ -16,6 +16,8 @@ import time
 import logging
 import logging.handlers
 import hashlib
+import sys
+PY3 = sys.version_info[0] == 3
 
 # noinspection PyCompatibility
 from concurrent import futures
@@ -517,24 +519,28 @@ class SoftwareUpdatePlugin(octoprint.plugin.BlueprintPlugin,
 
 			import hashlib
 			hash = hashlib.sha1()
+			def hash_update(value):
+				if PY3 and isinstance(value, str):
+					value = value.encode('utf-8')
+				hash.update(value)
 
 			targets = sorted(targets)
 			for target in targets:
 				current_hash = self._get_check_hash(checks.get(target, dict()))
 				if target in self._version_cache and not force:
 					data = self._version_cache[target]
-					hash.update(current_hash)
-					hash.update(str(data["timestamp"] + self._version_cache_ttl >= time.time() > data["timestamp"]))
-					hash.update(repr(data["information"]))
-					hash.update(str(data["available"]))
-					hash.update(str(data["possible"]))
-					hash.update(str(data.get("online", None)))
+					hash_update(current_hash)
+					hash_update(str(data["timestamp"] + self._version_cache_ttl >= time.time() > data["timestamp"]))
+					hash_update(repr(data["information"]))
+					hash_update(str(data["available"]))
+					hash_update(str(data["possible"]))
+					hash_update(str(data.get("online", None)))
 
-			hash.update(",".join(targets))
-			hash.update(str(self._version_cache_timestamp))
-			hash.update(str(self._connectivity_checker.online))
-			hash.update(str(self._update_in_progress))
-			hash.update(self.DATA_FORMAT_VERSION)
+			hash_update(",".join(targets))
+			hash_update(str(self._version_cache_timestamp))
+			hash_update(str(self._connectivity_checker.online))
+			hash_update(str(self._update_in_progress))
+			hash_update(self.DATA_FORMAT_VERSION)
 			return hash.hexdigest()
 
 		def condition():
@@ -731,7 +737,10 @@ class SoftwareUpdatePlugin(octoprint.plugin.BlueprintPlugin,
 			return "{" + ", ".join(lines) + "}"
 
 		hash = hashlib.md5()
-		hash.update(dict_to_sorted_repr(check))
+		if PY3:
+			hash.update(dict_to_sorted_repr(check).encode('utf-8'))
+		else:
+			hash.update(dict_to_sorted_repr(check))
 		return hash.hexdigest()
 
 	def _get_current_version(self, target, check, force=False, online=None):

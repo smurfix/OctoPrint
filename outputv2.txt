@@ -1,0 +1,57 @@
+.........................F.......................................................................................................................................................................................................................F.........................................................................................FF.........................................................................................................................................................................................................................................SSSSSS....................../usr/lib64/python2.7/importlib/__init__.py:37: DeprecationWarning: octoprint.users is deprecated, use octoprint.access.users instead
+  __import__(name)
+.......................................................................................................
+======================================================================
+FAIL: test_slice (filemanager.test_filemanager.FileManagerTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv2/lib/python2.7/site-packages/mock/mock.py", line 1305, in patched
+    return func(*args, **keywargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/filemanager/test_filemanager.py", line 492, in test_slice
+    self.assertEqual(mocked_atomic_write.call_args_list, expected_atomic_write_calls)
+AssertionError: [call('prefix/dest.file')] != [call('prefix/dest.file', 'wb')]
+
+======================================================================
+FAIL: tuple() -> empty tuple
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer/Documents/Dev/projects/OctoPrint/venv2/lib/python2.7/site-packages/ddt.py", line 145, in wrapper
+    return func(self, *args, **kwargs)
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/printer/test_estimation.py", line 74, in test_is_stable
+    self.assertEqual(self.estimation_helper.is_stable(), expected)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_effective (settings.test_settings.TestSettings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/settings/test_settings.py", line 438, in test_effective
+    self.assertDictEqual(self.expected_effective, effective)
+AssertionError: Second argument is not a dictionary
+
+======================================================================
+FAIL: test_effective_hash (settings.test_settings.TestSettings)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/razer_nocrypt/Dev/projects/OctoPrint/tests/settings/test_settings.py", line 451, in test_effective_hash
+    self.assertEqual(expected_effective_hash, effective_hash)
+AssertionError: '5351a46960eadc3acc1858b183233622' != '80c6d1e1765b4ba3a102dcc54cec5734'
+-------------------- >> begin captured stdout << ---------------------
+api: {enabled: true, key: test}
+devel:
+  virtualPrinter: {enabled: true, repetierStyleResends: false, sendWait: true, waitInterval: 1.0}
+folder: {scripts: null, timelapse: null, timelapse_tmp: null, uploads: null}
+serial:
+  additionalPorts: [/dev/portA, /dev/portB]
+  timeout: {connection: '5', detection: 1.0}
+server: {host: 0.0.0.0, port: 8080}
+
+[serial, api, folder, server, devel]
+
+
+--------------------- >> end captured stdout << ----------------------
+
+----------------------------------------------------------------------
+Ran 697 tests in 67.390s
+
+FAILED (SKIP=6, failures=4)

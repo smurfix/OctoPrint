@@ -10,6 +10,8 @@ import os
 import mimetypes
 import re
 from past.builtins import basestring
+import sys
+PY3 = sys.version_info[0] == 3
 
 import tornado
 import tornado.web
@@ -358,7 +360,8 @@ class UploadStorageFallbackHandler(RequestlessExceptionLoggingMixin):
 		if filename is not None:
 			# this is a file
 			import tempfile
-			handle = tempfile.NamedTemporaryFile(mode="wb", prefix=self._file_prefix, suffix=self._file_suffix, dir=self._path, delete=False)
+			mode = "w" if PY3 else "wb"
+			handle = tempfile.NamedTemporaryFile(mode=mode, prefix=self._file_prefix, suffix=self._file_suffix, dir=self._path, delete=False)
 			return dict(name=tornado.escape.utf8(name),
 						filename=tornado.escape.utf8(filename),
 						path=tornado.escape.utf8(handle.name),
@@ -507,9 +510,14 @@ def _extended_header_value(value):
 
 	if value.lower().startswith("iso-8859-1'") or value.lower().startswith("utf-8'"):
 		# RFC 5987 section 3.2
-		from urllib import unquote
+		if PY3:
+			from urllib.parse import unquote
+		else:
+			from urllib import unquote
 		encoding, _, value = value.split("'", 2)
-		return unquote(octoprint.util.to_str(value, encoding="iso-8859-1")).decode(encoding)
+		unquoted_value = unquote(octoprint.util.to_str(value, encoding="iso-8859-1"))
+		unquoted_value = unquoted_value if PY3 else unquoted_value.decode(encoding)
+		return unquoted_value
 
 	else:
 		# no encoding provided, strip potentially present quotes and call it a day

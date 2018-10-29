@@ -9,6 +9,7 @@ import ddt
 
 import octoprint.settings
 
+
 @ddt.ddt
 class TestHelpers(unittest.TestCase):
 

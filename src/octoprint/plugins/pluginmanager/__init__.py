@@ -31,6 +31,7 @@ import dateutil.parser
 import time
 import threading
 
+PY3 = sys.version_info[0] == 3
 _DATA_FORMAT_VERSION = "v2"
 
 class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
@@ -274,14 +275,18 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 		def etag():
 			import hashlib
 			hash = hashlib.sha1()
-			hash.update(repr(self._get_plugins()))
-			hash.update(str(self._repository_available))
-			hash.update(repr(self._repository_plugins))
-			hash.update(str(self._notices_available))
-			hash.update(repr(self._notices))
-			hash.update(repr(safe_mode))
-			hash.update(repr(self._connectivity_checker.online))
-			hash.update(repr(_DATA_FORMAT_VERSION))
+			def hash_update(value):
+				if PY3 and isinstance(value, str):
+					value = value.encode('utf-8')
+				hash.update(value)
+			hash_update(repr(self._get_plugins()))
+			hash_update(str(self._repository_available))
+			hash_update(repr(self._repository_plugins))
+			hash_update(str(self._notices_available))
+			hash_update(repr(self._notices))
+			hash_update(repr(safe_mode))
+			hash_update(repr(self._connectivity_checker.online))
+			hash_update(repr(_DATA_FORMAT_VERSION))
 			return hash.hexdigest()
 
 		def condition():
@@ -784,7 +789,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 
 		try:
 			import json
-			with octoprint.util.atomic_write(self._repository_cache_path, "wb") as f:
+			with octoprint.util.atomic_write(self._repository_cache_path) as f:
 				json.dump(repo_data, f)
 		except Exception as e:
 			self._logger.exception("Error while saving repository data to {}: {}".format(self._repository_cache_path, str(e)))
@@ -858,7 +863,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 
 		try:
 			import json
-			with octoprint.util.atomic_write(self._notices_cache_path, "wb") as f:
+			with octoprint.util.atomic_write(self._notices_cache_path) as f:
 				json.dump(notice_data, f)
 		except Exception as e:
 			self._logger.exception("Error while saving notices to {}: {}".format(self._notices_cache_path, str(e)))

@@ -6,6 +6,8 @@ __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agp
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import logging
+import sys
+PY3 = sys.version_info[0] == 3
 
 from flask import Blueprint, request, jsonify, abort, current_app, session, make_response, g
 from flask_login import login_user, logout_user, current_user
@@ -331,7 +333,8 @@ def _test_path(data):
 	if check_writable_dir and check_type == "dir":
 		try:
 			test_path = os.path.join(path, ".testballoon.txt")
-			with open(test_path, "wb") as f:
+			file_mode = "w" if PY3 else "wb"
+			with open(test_path, file_mode) as f:
 				f.write("Test")
 			os.remove(test_path)
 		except:

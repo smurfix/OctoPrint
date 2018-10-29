@@ -55,7 +55,7 @@ class TestSlicingManager(unittest.TestCase):
 		self.plugin_manager.return_value.get_implementations.side_effect = get_implementations
 
 	def test_registered_slicers(self):
-		self.assertEqual(["mock"], self.slicing_manager.registered_slicers)
+		self.assertEqual(["mock"], list(self.slicing_manager.registered_slicers))
 
 	def test_slicing_enabled(self):
 		self.assertTrue(self.slicing_manager.slicing_enabled)

@@ -12,6 +12,9 @@ import yaml
 import uuid
 import wrapt
 import time
+import sys
+
+PY3 = sys.version_info[0] == 3
 
 import logging
 
@@ -141,8 +144,10 @@ class UserManager(GroupChangeListener, object):
 				salt = "".join(choice(chars) for _ in range(32))
 				settings().set(["accessControl", "salt"], salt)
 				settings().save()
-
-		return hashlib.sha512(to_str(password, encoding="utf-8", errors="replace") + to_str(salt)).hexdigest()
+		if PY3:
+			return hashlib.sha512(password.encode("utf-8") + salt.encode('utf-8')).hexdigest()
+		else:
+			return hashlib.sha512(to_str(password, encoding="utf-8", errors="replace") + to_str(salt)).hexdigest()
 
 	def check_password(self, username, password):
 		user = self.find_user(username)
@@ -498,7 +503,7 @@ class FilebasedUserManager(UserManager):
 				"roles": user._roles
 			}
 
-		with atomic_write(self._userfile, "wb", permissions=0o600, max_permissions=0o666) as f:
+		with atomic_write(self._userfile, permissions=0o600, max_permissions=0o666) as f:
 			yaml.safe_dump(data, f, default_flow_style=False, indent=4, allow_unicode=True)
 			self._dirty = False
 		self._load()
