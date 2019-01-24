@@ -4,5 +4,5 @@
 # Thu, 24 Jan 2019 17:42:56 +0100
 export PYBUILD_NAME=octoprint
 %:
-	dh $@ --with python3 --buildsystem=pybuild
+	dh $@ --with python2 --buildsystem=pybuild
 
