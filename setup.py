@@ -17,45 +17,45 @@ PYTHON_REQUIRES = ">=2.7.3,<3" # TODO change to >=2.7.9,<3 in 1.3.11
 
 # Requirements for our application
 INSTALL_REQUIRES = [
-	"flask>=0.10.1,<0.11",
-	"Jinja2>=2.8.1,<2.9", # Jinja 2.9 has breaking changes WRT template scope - we can't
+	"flask>=0.10.1",
+	"Jinja2>=2.8.1", # Jinja 2.9 has breaking changes WRT template scope - we can't
 	                      # guarantee backwards compatibility for plugins and such with that
 	                      # version, hence we need to pin to a lower version for now. See #1697
 	"regex!=2018.11.6", # avoid broken 2018.11.6. See #2874
-	"werkzeug>=0.8.3,<0.9",
+	"werkzeug>=0.8.3",
 	"tornado==4.5.3",
-	#"sockjs-tornado>=1.0.3,<1.1", # current version is incompatible to tornado 5, we use a
+	#"sockjs-tornado>=1.0.3", # current version is incompatible to tornado 5, we use a
 	                               # vendored one
-	"PyYAML>=3.10,<3.11",
-	"Flask-Login>=0.2.11,<0.3",
-	"Flask-Principal>=0.3.5,<0.4",
-	"Flask-Babel>=0.9,<0.10",
-	"Flask-Assets>=0.10,<0.11",
-	"markdown>=2.6.9,<2.7",
-	"pyserial>=3.4,<3.5",
-	"netaddr>=0.7.19,<0.8",
-	"watchdog>=0.8.3,<0.9",
+	"PyYAML>=3.10",
+	"Flask-Login>=0.2.11",
+	"Flask-Principal>=0.3.5",
+	"Flask-Babel>=0.9",
+	"Flask-Assets>=0.10",
+	"markdown>=2.6.9",
+	"pyserial>=3.4",
+	"netaddr>=0.7.19",
+	"watchdog>=0.8.3",
 	"sarge==0.1.5post0",
-	"netifaces>=0.10.6,<0.11",
-	"pylru>=1.0.9,<1.1",
-	"rsa>=3.2.3,<3.3",
-	"pkginfo>=1.4.2,<1.5",
-	"requests>=2.18.4,<3",
-	"semantic_version>=2.4.2,<2.5",
-	"psutil>=5.4.6,<5.5",
-	"Click>=6.2,<6.3",
-	"awesome-slugify>=1.6.5,<1.7",
-	"feedparser>=5.2.1,<5.3",
-	"chainmap>=1.0.2,<1.1",
-	"future>=0.15.2,<0.16",
-	"scandir>=1.3,<1.4",
-	"websocket-client>=0.40.0,<0.41",
-	"python-dateutil>=2.6.1,<2.7",
-	"wrapt>=1.10.11,<1.11",
-	"futures>=3.1.1,<3.2",
-	"emoji>=0.4.5,<0.5",
-	"monotonic>=1.3,<1.4",
-	"frozendict>=1.2,<1.3"
+	"netifaces>=0.10.6",
+	"pylru>=1.0.9",
+	"rsa>=3.2.3",
+	"pkginfo>=1.4.2",
+	"requests>=2.18.4",
+	"semantic_version>=2.4.2",
+	"psutil>=5.4.6",
+	"Click>=6.2",
+	"awesome-slugify>=1.6.5",
+	"feedparser>=5.2.1",
+	"chainmap>=1.0.2",
+	"future>=0.15.2",
+	"scandir>=1.3",
+	"websocket-client>=0.40.0",
+	"python-dateutil>=2.6.1",
+	"wrapt>=1.10.11",
+	"futures>=3.1.1",
+	"emoji>=0.4.5",
+	"monotonic>=1.3",
+	"frozendict>=1.2"
 ]
 
 if sys.platform == "darwin":
@@ -66,12 +66,12 @@ EXTRA_REQUIRES = dict(
 	# Dependencies for developing OctoPrint
 	develop=[
 		# Testing dependencies
-		"mock>=2.0.0,<3",
-		"nose>=1.3.0,<1.4",
+		"mock>=2.0.0",
+		"nose>=1.3.0",
 		"ddt",
 
 		# Documentation dependencies
-		"sphinx>=1.6,<1.7",
+		"sphinx>=1.6",
 		"sphinxcontrib-httpdomain",
 		"sphinxcontrib-mermaid>=0.3",
 		"sphinx_rtd_theme",
@@ -79,7 +79,7 @@ EXTRA_REQUIRES = dict(
 
 	# Dependencies for developing OctoPrint plugins
 	plugins=[
-		"cookiecutter>=1.4,<1.7"
+		"cookiecutter>=1.4"
 	]
 )
 
