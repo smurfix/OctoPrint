@@ -517,9 +517,7 @@ def to_str(s_or_u, encoding="utf-8", errors="strict"):
 
 def to_unicode(s_or_u, encoding="utf-8", errors="strict"):
 	"""Make sure ``s_or_u`` is a unicode string."""
-	if PY3:
-		return s_or_u
-	if isinstance(s_or_u, str):
+	if isinstance(s_or_u, bytes):
 		return s_or_u.decode(encoding, errors=errors)
 	else:
 		return s_or_u

@@ -12,7 +12,7 @@ import re
 from octoprint.settings import settings, valid_boolean_trues
 from octoprint.server import printer, printerProfileManager, NO_CONTENT
 from octoprint.server.api import api
-from octoprint.server.util.flask import require_firstrun, get_json_command_from_request
+from octoprint.server.util.flask import no_firstrun_access, get_json_command_from_request
 
 from octoprint.printer import UnknownScript
 
@@ -60,7 +60,7 @@ def printerState():
 
 
 @api.route("/printer/tool", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def printerToolCommand():
 	if not printer.is_operational():
@@ -151,7 +151,7 @@ def printerToolCommand():
 
 
 @api.route("/printer/tool", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.STATUS.require(403)
 def printerToolState():
 	if not printer.is_operational():
@@ -164,7 +164,7 @@ def printerToolState():
 
 
 @api.route("/printer/bed", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def printerBedCommand():
 	if not printer.is_operational():
@@ -211,7 +211,7 @@ def printerBedCommand():
 
 
 @api.route("/printer/bed", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.STATUS.require(403)
 def printerBedState():
 	if not printer.is_operational():
@@ -231,7 +231,7 @@ def printerBedState():
 
 
 @api.route("/printer/printhead", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def printerPrintheadCommand():
 	valid_commands = {
@@ -295,7 +295,7 @@ def printerPrintheadCommand():
 
 
 @api.route("/printer/sd", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def printerSdCommand():
 	if not settings().getBoolean(["feature", "sdSupport"]):
@@ -326,7 +326,7 @@ def printerSdCommand():
 
 
 @api.route("/printer/sd", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.STATUS.require(403)
 def printerSdState():
 	if not settings().getBoolean(["feature", "sdSupport"]):
@@ -339,7 +339,7 @@ def printerSdState():
 
 
 @api.route("/printer/command", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def printerCommand():
 	if not printer.is_operational():
@@ -400,7 +400,7 @@ def printerCommand():
 	return NO_CONTENT
 
 @api.route("/printer/command/custom", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.CONTROL.require(403)
 def getCustomControls():
 	# TODO: document me

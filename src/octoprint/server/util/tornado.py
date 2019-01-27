@@ -1141,12 +1141,6 @@ def access_validation_factory(app, validator, *args):
 	:param validator: the access validator to use inside the validation wrapper
 	:return: an access validator taking a request as parameter and performing the request validation
 	"""
-
-	# TODO remove in 1.4.0
-	if len(args):
-		# old parameters incl. login_manager
-		validator = args[0]
-
 	def f(request):
 		"""
 		Creates a custom wsgi and Flask request context in order to be able to process user information
@@ -1160,7 +1154,7 @@ def access_validation_factory(app, validator, *args):
 		with app.request_context(wsgi_environ):
 			app.session_interface.open_session(app, flask.request)
 			app.login_manager.reload_user()
-			validator(flask.request)
+			validator(flask.request, *args)
 	return f
 
 def path_validation_factory(path_filter, status_code=404):

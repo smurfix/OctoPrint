@@ -26,7 +26,7 @@ from . import version_checks, updaters, exceptions, util, cli
 
 from flask_babel import gettext
 
-from octoprint.server.util.flask import require_firstrun, with_revalidation_checking, check_etag
+from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking, check_etag
 from octoprint.server import VERSION, REVISION, BRANCH
 from octoprint.access import USER_GROUP
 from octoprint.access.permissions import Permissions
@@ -518,7 +518,7 @@ class SoftwareUpdatePlugin(octoprint.plugin.BlueprintPlugin,
 	#~~ BluePrint API
 
 	@octoprint.plugin.BlueprintPlugin.route("/check", methods=["GET"])
-	@require_firstrun
+	@no_firstrun_access
 	@Permissions.PLUGIN_SOFTWAREUPDATE_CHECK.require(403)
 	def check_for_update(self):
 		if "check" in flask.request.values:
@@ -587,7 +587,7 @@ class SoftwareUpdatePlugin(octoprint.plugin.BlueprintPlugin,
 
 
 	@octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
-	@require_firstrun
+	@no_firstrun_access
 	@Permissions.PLUGIN_SOFTWAREUPDATE_UPDATE.require(403)
 	def perform_update(self):
 		if self._printer.is_printing() or self._printer.is_paused():

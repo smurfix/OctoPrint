@@ -9,11 +9,13 @@ import octoprint.plugin
 from octoprint.settings import default_settings
 from octoprint.plugin.core import FolderOrigin
 from octoprint.server import admin_permission, NO_CONTENT
-from octoprint.server.util.flask import restricted_access
+from octoprint.server.util.flask import no_firstrun_access
 from octoprint.util import is_hidden_path
 from octoprint.util.version import get_octoprint_version_string, get_octoprint_version, get_comparable_version, is_octoprint_compatible
 from octoprint.util.platform import is_os_compatible
 from octoprint.util.pip import LocalPipCaller
+from octoprint.access import ADMIN_GROUP
+from octoprint.access.permissions import Permissions
 
 try:
 	from os import scandir
@@ -60,6 +62,18 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		self._in_progress = []
 		self._in_progress_lock = threading.RLock()
 
+	# Additional permissions hook
+
+	def get_additional_permissions(self):
+		return [
+			dict(key="ACCESS",
+			     name="Backup access",
+			     description=gettext("Allows access to backups and restores"),
+			     roles=["access"],
+			     dangerous=True,
+			     default_groups=[ADMIN_GROUP])
+		]
+
 	##~~ StarupPlugin
 
 	def on_after_startup(self):
@@ -77,8 +91,8 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 	##~~ BlueprintPlugin
 
 	@octoprint.plugin.BlueprintPlugin.route("/", methods=["GET"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def get_state(self):
 		backups = self._get_backups()
 		unknown_plugins = self._get_unknown_plugins()
@@ -88,16 +102,16 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		                     restore_supported=is_os_compatible(["!windows"]))
 
 	@octoprint.plugin.BlueprintPlugin.route("/unknown_plugins", methods=["GET"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def get_unknown_plugins(self):
 		# TODO add caching
 		unknown_plugins = self._get_unknown_plugins()
 		return flask.jsonify(unknown_plugins=unknown_plugins)
 
 	@octoprint.plugin.BlueprintPlugin.route("/unknown_plugins", methods=["DELETE"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def delete_unknown_plugins(self):
 		data_file = os.path.join(self.get_plugin_data_folder(), UNKNOWN_PLUGINS_FILE)
 		try:
@@ -107,15 +121,15 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		return NO_CONTENT
 
 	@octoprint.plugin.BlueprintPlugin.route("/backup", methods=["GET"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def get_backups(self):
 		backups = self._get_backups()
 		return flask.jsonify(backups=backups)
 
 	@octoprint.plugin.BlueprintPlugin.route("/backup", methods=["POST"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def create_backup(self):
 		backup_file = "backup-{}.zip".format(time.strftime("%Y%m%d-%H%M%S"))
 
@@ -167,8 +181,8 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		return response
 
 	@octoprint.plugin.BlueprintPlugin.route("/backup/<filename>", methods=["DELETE"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def delete_backup(self, filename):
 		backup_folder = self.get_plugin_data_folder()
 		full_path = os.path.realpath(os.path.join(backup_folder, filename))
@@ -183,8 +197,8 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		return NO_CONTENT
 
 	@octoprint.plugin.BlueprintPlugin.route("/restore", methods=["POST"])
-	@admin_permission.require(403)
-	@restricted_access
+	@no_firstrun_access
+	@Permissions.PLUGIN_BACKUP_ACCESS.require(403)
 	def perform_restore(self):
 		if not is_os_compatible(["!windows"]):
 			return flask.make_response(u"Invalid request, the restores are not supported on the underlying operating system", 400)
@@ -935,5 +949,6 @@ __plugin_implementation__ = BackupPlugin()
 __plugin_hooks__ = {
 	"octoprint.server.http.routes": __plugin_implementation__.route_hook,
 	"octoprint.server.http.bodysize": __plugin_implementation__.bodysize_hook,
-	"octoprint.cli.commands": __plugin_implementation__.cli_commands_hook
+	"octoprint.cli.commands": __plugin_implementation__.cli_commands_hook,
+	"octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
 }

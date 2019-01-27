@@ -23,7 +23,7 @@ import flask
 from collections import OrderedDict
 
 from octoprint.access.permissions import Permissions
-from octoprint.server.util.flask import require_firstrun, with_revalidation_checking, check_etag
+from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking, check_etag
 from octoprint.util import utmify
 from flask_babel import gettext
 from octoprint import __version__ as OCTOPRINT_VERSION
@@ -152,7 +152,7 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 	# Blueprint Plugin
 
 	@octoprint.plugin.BlueprintPlugin.route("/channels", methods=["GET"])
-	@require_firstrun
+	@no_firstrun_access
 	@Permissions.PLUGIN_ANNOUNCEMENTS_READ.require(403)
 	def get_channel_data(self):
 		from octoprint.settings import valid_boolean_trues
@@ -217,7 +217,7 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 		                                  unless=lambda: force)(view)()
 
 	@octoprint.plugin.BlueprintPlugin.route("/channels/<channel>", methods=["POST"])
-	@require_firstrun
+	@no_firstrun_access
 	@Permissions.PLUGIN_ANNOUNCEMENTS_READ.require(403)
 	def channel_command(self, channel):
 		from octoprint.server.util.flask import get_json_command_from_request

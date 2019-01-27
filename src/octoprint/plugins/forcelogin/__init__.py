@@ -12,6 +12,7 @@ from flask_babel import gettext
 
 from collections import defaultdict
 import threading
+import json
 
 class ForceLoginPlugin(octoprint.plugin.UiPlugin,
                        octoprint.plugin.TemplatePlugin,
@@ -29,7 +30,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 		)
 
 	def will_handle_ui(self, request):
-		if self._user_manager.enabled and not self._user_manager.hasBeenCustomized():
+		if self._user_manager.enabled and not self._user_manager.has_been_customized():
 			# ACL hasn't been configured yet, make an exception
 			return False
 
@@ -51,10 +52,15 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 		# then try a passive login
 		result = passive_login()
 		if hasattr(result, "status_code") and result.status_code == 200:
-			# successful? No need for handling the UI
-			return False
-		else:
-			return True
+			try:
+				data = json.loads(result.data)
+				if "name" in data:
+					# passive login successful, no need to handle that
+					return False
+			except:
+				self._logger.exception("Error while trying to decode passive login response")
+
+		return True
 
 	def on_ui_render(self, now, request, render_kwargs):
 		from flask import render_template, make_response
@@ -113,7 +119,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 
 	def get_before_request_handlers(self):
 		def check_login_required():
-			if self._user_manager.enabled and not self._user_manager.hasBeenCustomized():
+			if self._user_manager.enabled and not self._user_manager.has_been_customized():
 				# ACL hasn't been configured yet, make an exception
 				return
 			elif not self._user_manager.enabled:
@@ -124,13 +130,13 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 				return
 
 			user = flask_login.current_user
-			if user is None or user.is_anonymous() or not user.is_active():
+			if user is None or user.is_anonymous or not user.is_active:
 				return flask.make_response("Forbidden", 403)
 
 		return [check_login_required]
 
 	def access_validator(self, request):
-		if self._user_manager.enabled and not self._user_manager.hasBeenCustomized():
+		if self._user_manager.enabled and not self._user_manager.has_been_customized():
 			# ACL hasn't been configured yet, make an exception
 			return
 		elif not self._user_manager.enabled:
@@ -145,14 +151,14 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 			raise tornado.web.HTTPError(403)
 
 	def socket_register_validator(self, socket, user):
-		if self._user_manager.enabled and not self._user_manager.hasBeenCustomized():
+		if self._user_manager.enabled and not self._user_manager.has_been_customized():
 			# ACL hasn't been configured yet, make an exception
 			return True
 		elif not self._user_manager.enabled:
 			# ACL isn't enabled
 			return True
 
-		return user is not None and not user.is_anonymous() and user.is_active()
+		return user is not None and not user.is_anonymous and user.is_active
 
 	def socket_authed(self, socket, user):
 		with self._message_backlog_mutex:
@@ -164,7 +170,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 			self._logger.debug("Sent backlog of {} message(s) via socket".format(len(backlog)))
 
 	def socket_emit_validator(self, socket, user, message, payload):
-		if self._user_manager.enabled and not self._user_manager.hasBeenCustomized():
+		if self._user_manager.enabled and not self._user_manager.has_been_customized():
 			# ACL hasn't been configured yet, make an exception
 			return True
 		elif not self._user_manager.enabled:
@@ -174,7 +180,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 		if message in ("connected", "reauthRequired"):
 			return True
 
-		if user is not None and not user.is_anonymous() and user.is_active():
+		if user is not None and not user.is_anonymous and user.is_active:
 			return True
 
 		with self._message_backlog_mutex:

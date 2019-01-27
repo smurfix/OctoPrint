@@ -15,7 +15,7 @@ import octoprint_setuptools
 #-----------------------------------------------------------------------------------------------------------------------
 
 # Supported python versions
-PYTHON_REQUIRES = ">=2.7.9,<3"
+PYTHON_REQUIRES = ">=2.7.9"      # py 3 marked as supported so that we can migrate... NOT officially supported though!
 
 # Requirements for our application
 FLASK_VERSION_STRING = "flask>=0.12,<0.13"
@@ -37,9 +37,6 @@ INSTALL_REQUIRES = [
 	#"sockjs-tornado>=1.0.3,<1.1", # current version is incompatible to tornado 5, we use a
 	                               # vendored one
 	PYYAML_VERSION_STRING,
-	# the following dependencies are non trivial to update since later versions introduce backwards incompatible
-	# changes that might affect plugins, or due to other observed problems
-
 	FLASK_VERSION_STRING,        # newer versions require newer Jinja versions
 	WERKZEUG_VERSION_STRING,
 	JINJA_VERSION_STRING,        # Jinja 2.9 has breaking changes WRT template scope - we can't

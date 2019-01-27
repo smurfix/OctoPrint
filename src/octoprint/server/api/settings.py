@@ -18,7 +18,7 @@ from octoprint.settings import settings, valid_boolean_trues
 
 from octoprint.server import admin_permission, printer, pluginManager
 from octoprint.server.api import api, NO_CONTENT
-from octoprint.server.util.flask import require_firstrun, with_revalidation_checking
+from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking
 from octoprint.access.permissions import Permissions
 
 import octoprint.plugin
@@ -289,7 +289,7 @@ def _get_plugin_settings():
 
 
 @api.route("/settings", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def setSettings():
 	if not "application/json" in request.headers["Content-Type"]:
@@ -314,7 +314,7 @@ def setSettings():
 
 
 @api.route("/settings/apikey", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def generateApiKey():
 	apikey = settings().generateApiKey()
@@ -322,14 +322,14 @@ def generateApiKey():
 
 
 @api.route("/settings/apikey", methods=["DELETE"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def deleteApiKey():
 	settings().deleteApiKey()
 	return NO_CONTENT
 
 @api.route("/settings/templates", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def fetchTemplateData():
 	from octoprint.server.views import fetch_template_data

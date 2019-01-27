@@ -22,8 +22,9 @@ import octoprint.plugin
 from octoprint.server import NO_CONTENT
 from octoprint.settings import settings as s, valid_boolean_trues
 from octoprint.server.util import noCachingExceptGetResponseHandler, enforceApiKeyRequestHandler, loginFromApiKeyRequestHandler, loginFromAuthorizationHeaderRequestHandler, corsRequestHandler, corsResponseHandler
+from octoprint.server.util.flask import no_firstrun_access, get_json_command_from_request, passive_login, get_remote_address
 from octoprint.access.permissions import Permissions
-from octoprint.server.util.flask import require_firstrun, restricted_access, get_json_command_from_request, passive_login, get_remote_address
+from octoprint.server.util.flask import restricted_access, get_json_command_from_request, passive_login, get_remote_address
 
 
 #~~ init api blueprint, including sub modules
@@ -78,7 +79,7 @@ def pluginData(name):
 #~~ commands for plugins
 
 @api.route("/plugin/<string:name>", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 def pluginCommand(name):
 	api_plugins = octoprint.plugin.plugin_manager().get_filtered_implementations(lambda p: p._identifier == name, octoprint.plugin.SimpleApiPlugin)
 
@@ -174,7 +175,7 @@ def wizardFinish():
 
 
 @api.route("/state", methods=["GET"])
-@require_firstrun
+@no_firstrun_access
 def apiPrinterState():
 	return make_response(("/api/state has been deprecated, use /api/printer instead", 405, []))
 
@@ -225,7 +226,7 @@ def login():
 				remote_addr = get_remote_address(request)
 				logging.getLogger(__name__).info("Actively logging in user {} from {}".format(user.get_id(), remote_addr))
 
-				response = user.asDict()
+				response = user.as_dict()
 				response["_is_external_client"] = s().getBoolean(["server", "ipCheck", "enabled"]) \
 				                                  and not util_net.is_lan_address(remote_addr,
 				                                                                  additional_private=s().get(["server", "ipCheck", "trustedSubnets"]))
@@ -260,7 +261,7 @@ def _logout(user):
 
 
 @api.route("/util/test", methods=["POST"])
-@require_firstrun
+@no_firstrun_access
 @Permissions.ADMIN.require(403)
 def utilTest():
 	valid_commands = dict(

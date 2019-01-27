@@ -561,30 +561,32 @@ def _local_networks():
 	return _cached_local_networks
 
 def passive_login():
-	logger = logging.getLogger(__name__)
+	user = flask_login.current_user
 
-	if octoprint.server.userManager.enabled:
-		user = octoprint.server.userManager.login_user(flask_login.current_user)
-	else:
-		user = flask_login.current_user
+	remoteAddr = get_remote_address(flask.request)
+	ipCheckEnabled = settings().getBoolean(["server", "ipCheck", "enabled"])
+	ipCheckTrusted = settings().get(["server", "ipCheck", "trustedSubnets"])
 
-	remote_address = get_remote_address(flask.request)
-	ip_check_enabled = settings().getBoolean(["server", "ipCheck", "enabled"])
-	ip_check_trusted = settings().get(["server", "ipCheck", "trustedSubnets"])
+	if isinstance(user, LocalProxy):
+		# noinspection PyProtectedMember
+		user = user._get_current_object()
 
-	if user is not None and not user.is_anonymous() and user.is_active():
+	def login(u):
+		# login known user
+		if not u.is_anonymous:
+			u = octoprint.server.userManager.login_user(u)
+		flask_login.login_user(u)
 		flask_principal.identity_changed.send(flask.current_app._get_current_object(),
-		                                      identity=flask_principal.Identity(user.get_id()))
-		if hasattr(user, "session"):
-			flask.session["usersession.id"] = user.session
-		flask.g.user = user
+		                                      identity=flask_principal.Identity(u.get_id()))
+		if hasattr(u, "session"):
+			flask.session["usersession.id"] = u.session
+		flask.g.user = u
+		return u
 
-		logger.info("Passively logging in user {} from {}".format(user.get_id(), remote_address))
-
-		response = user.asDict()
-		response["_is_external_client"] = ip_check_enabled and not is_lan_address(remote_address,
-		                                                                          additional_private=ip_check_trusted)
-		return flask.jsonify(response)
+	if user is not None and user.is_active:
+		# login known user
+		logging.getLogger(__name__).info("Passively logging in user {} from {}".format(user.get_id(), remoteAddr))
+		user = login(user)
 
 	elif settings().getBoolean(["accessControl", "autologinLocal"]) \
 			and settings().get(["accessControl", "autologinAs"]) is not None \
@@ -595,27 +597,20 @@ def passive_login():
 		logger.debug("Checking if remote address {} is in localNetworks ({!r})".format(remote_address, local_networks))
 
 		try:
-			if netaddr.IPAddress(remote_address) in local_networks:
-				user = octoprint.server.userManager.findUser(autologin_as)
-				if user is not None and user.is_active():
-					user = octoprint.server.userManager.login_user(user)
-					flask.session["usersession.id"] = user.session
-					flask.g.user = user
-					flask_login.login_user(user)
-					flask_principal.identity_changed.send(flask.current_app._get_current_object(),
-					                                      identity=flask_principal.Identity(user.get_id()))
+			if netaddr.IPAddress(remoteAddr) in localNetworks:
+				autologin_user = octoprint.server.userManager.find_user(autologinAs)
+				if autologin_user is not None and user.is_active:
+					autologin_user = octoprint.server.userManager.login_user(autologin_user)
 
-					logger.info("Passively logging in user {} from {} via autologin".format(user.get_id(),
-					                                                                        remote_address))
-
-					response = user.asDict()
-					response["_is_external_client"] = ip_check_enabled and not is_lan_address(remote_address,
-					                                                                          additional_private=ip_check_trusted)
-					return flask.jsonify(response)
+					logging.getLogger(__name__).info("Passively logging in user {} from {} via autologin".format(user.get_id(), remoteAddr))
+					user = login(autologin_user)
 		except:
 			logger.exception("Could not autologin user {} for networks {}".format(autologin_as, localNetworks))
 
-	return flask.jsonify(user)
+	response = user.as_dict()
+	response["_is_external_client"] = ipCheckEnabled and not is_lan_address(remoteAddr,
+	                                                                        additional_private=ipCheckTrusted)
+	return flask.jsonify(response)
 
 
 #~~ cache decorator for cacheable views
@@ -1128,7 +1123,7 @@ def permission_validator(request, permission):
 	"""
 
 	user = get_flask_user_from_request(request)
-	if user is None or not user.is_authenticated() or not user.is_admin():
+	if user is None or not user.is_authenticated or not user.has_permission(permission):
 		raise tornado.web.HTTPError(403)
 
 @deprecated("admin_validator is deprecated, please use new permission_validator", since="")
@@ -1138,19 +1133,7 @@ def admin_validator(request):
 
 @deprecated("user_validator is deprecated, please use new permission_validator", since="")
 def user_validator(request):
-	"""
-	Validates that the given request is made by an authenticated user, identified either by API key or existing Flask
-	session.
-
-	Must be executed in an existing Flask request context!
-
-	:param request: The Flask request object
-	"""
-
-	user = get_flask_user_from_request(request)
-	if user is None or not user.is_authenticated():
-		raise tornado.web.HTTPError(403)
-
+	return True
 
 def get_flask_user_from_request(request):
 	"""
@@ -1207,25 +1190,8 @@ def restricted_access(func):
 		return no_firstrun_access(flask_login.login_required(func))(*args, **kwargs)
 	return decorated_view
 
+
 def no_firstrun_access(func):
-	"""
-	If you decorate a view with this, it will ensure that first setup has been
-	done for OctoPrint's Access Control.
-
-	If OctoPrint's Access Control has not been setup yet (indicated by the "firstRun"
-	flag from the settings being set to True and the userManager not indicating
-	that it's user database has been customized from default), the decorator
-	will cause a HTTP 403 status code to be returned by the decorated resource.
-	"""
-
-	@functools.wraps(func)
-	def decorated_view(*args, **kwargs):
-		return require_firstrun(flask_login.login_required(func))(*args, **kwargs)
-
-	return decorated_view
-
-
-def require_firstrun(func):
 	"""
 	If you decorate a view with this, it will ensure that first setup has been
 	done for OctoPrint's Access Control.
@@ -1238,12 +1204,12 @@ def require_firstrun(func):
 	@functools.wraps(func)
 	def decorated_view(*args, **kwargs):
 		# if OctoPrint hasn't been set up yet, abort
-		if settings().getBoolean(["server", "firstRun"]) and settings().getBoolean(["accessControl", "enabled"]) and (
-				octoprint.server.userManager is None or not octoprint.server.userManager.has_been_customized()):
+		if settings().getBoolean(["server", "firstRun"]) and settings().getBoolean(["accessControl", "enabled"]) and (octoprint.server.userManager is None or not octoprint.server.userManager.hasBeenCustomized()):
 			return flask.make_response("OctoPrint isn't setup yet", 403)
 		return func(*args, **kwargs)
 
 	return decorated_view
+
 
 def firstrun_only_access(func):
 	"""

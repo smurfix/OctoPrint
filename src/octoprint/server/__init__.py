@@ -595,14 +595,27 @@ class Server(object):
 
 		##~~ Permission validators
 
-		timelapse_permission_validator = dict(access_validation=util.tornado.access_validation_factory(app, loginManager, util.flask.permission_validator, permissions.Permissions.TIMELAPSE_LIST))
-		download_permission_validator = dict(access_validation=util.tornado.access_validation_factory(app, loginManager, util.flask.permission_validator, permissions.Permissions.FILES_DOWNLOAD))
-		log_permission_validator = dict(access_validation=util.tornado.access_validation_factory(app, loginManager, util.flask.permission_validator, permissions.Permissions.PLUGIN_LOGGING_MANAGE))
-		camera_permission_validator = dict(access_validation=util.tornado.access_validation_factory(app, loginManager, util.flask.permission_validator, permissions.Permissions.WEBCAM))
+		access_validators_from_plugins = []
+		for plugin, hook in pluginManager.get_hooks("octoprint.server.http.access_validator").items():
+			try:
+				access_validators_from_plugins.append(util.tornado.access_validation_factory(app, hook))
+			except:
+				self._logger.exception("Error while adding tornado access validator from plugin {}".format(plugin))
+		access_validator = dict(access_validation=util.tornado.validation_chain(*access_validators_from_plugins))
+
+		timelapse_validators = [util.tornado.access_validation_factory(app, util.flask.permission_validator, permissions.Permissions.TIMELAPSE_LIST),] + access_validators_from_plugins
+		download_validators = [util.tornado.access_validation_factory(app, util.flask.permission_validator, permissions.Permissions.FILES_DOWNLOAD),] + access_validators_from_plugins
+		log_validators = [util.tornado.access_validation_factory(app, util.flask.permission_validator, permissions.Permissions.PLUGIN_LOGGING_MANAGE),] + access_validators_from_plugins
+		camera_validators = [util.tornado.access_validation_factory(app, util.flask.permission_validator, permissions.Permissions.WEBCAM),] + access_validators_from_plugins
+
+		timelapse_permission_validator = dict(access_validation=util.tornado.validation_chain(*timelapse_validators))
+		download_permission_validator = dict(access_validation=util.tornado.validation_chain(*download_validators))
+		log_permission_validator = dict(access_validation=util.tornado.validation_chain(*log_validators))
+		camera_permission_validator = dict(access_validation=util.tornado.validation_chain(*camera_validators))
 
 		no_hidden_files_validator = dict(path_validation=util.tornado.path_validation_factory(lambda path: not octoprint.util.is_hidden_path(path),
 		                                                                                      status_code=404))
-		timelapse_validator = dict(path_validation=util.tornado.path_validation_factory(lambda path: not octoprint.util.is_hidden_path(path) and octoprint.timelapse.valid_timelapse(path),
+		timelapse_path_validator = dict(path_validation=util.tornado.path_validation_factory(lambda path: not octoprint.util.is_hidden_path(path) and octoprint.timelapse.valid_timelapse(path),
 		                                                                                status_code=404))
 
 		def joined_dict(*dicts):
@@ -622,23 +635,21 @@ class Server(object):
 			(r"/downloads/timelapse/(.*)", util.tornado.LargeResponseHandler, joined_dict(dict(path=self._settings.getBaseFolder("timelapse")),
 			                                                                              timelapse_permission_validator,
 			                                                                              download_handler_kwargs,
-			                                                                              timelapse_validator,
-			                                                                              access_validator)),
+			                                                                              timelapse_path_validator)),
 			(r"/downloads/files/local/(.*)", util.tornado.LargeResponseHandler, joined_dict(dict(path=self._settings.getBaseFolder("uploads"),
 			                                                                                     as_attachment=True,
 			                                                                                     name_generator=download_name_generator),
 																							download_permission_validator,
 			                                                                                download_handler_kwargs,
 			                                                                                no_hidden_files_validator,
-			                                                                                additional_mime_types,
-			                                                                                access_validator)),
+			                                                                                additional_mime_types)),
 			(r"/downloads/logs/([^/]*)", util.tornado.LargeResponseHandler, joined_dict(dict(path=self._settings.getBaseFolder("logs"),
 			                                                                                 mime_type_guesser=lambda *args, **kwargs: "text/plain"),
 			                                                                            download_handler_kwargs,
 			                                                                            log_permission_validator)),
 			# camera snapshot
 			(r"/downloads/camera/current", util.tornado.UrlProxyHandler, joined_dict(dict(url=self._settings.get(["webcam", "snapshot"]),
-			                                                                  as_attachment=True),
+			                                                                              as_attachment=True),
 			                                                                         camera_permission_validator)),
 			# generated webassets
 			(r"/static/webassets/(.*)", util.tornado.LargeResponseHandler, dict(path=os.path.join(self._settings.getBaseFolder("generated"), "webassets"))),
@@ -1438,6 +1449,26 @@ class Server(object):
 			"js/lib/loglevel.min.js",
 			"js/lib/sockjs.js",
 			"js/lib/ResizeSensor.js"
+		]
+		js_client = [
+			"js/app/client/base.js",
+			"js/app/client/socket.js",
+			"js/app/client/browser.js",
+			"js/app/client/connection.js",
+			"js/app/client/control.js",
+			"js/app/client/files.js",
+			"js/app/client/job.js",
+			"js/app/client/languages.js",
+			"js/app/client/printer.js",
+			"js/app/client/printerprofiles.js",
+			"js/app/client/settings.js",
+			"js/app/client/slicing.js",
+			"js/app/client/system.js",
+			"js/app/client/timelapse.js",
+			"js/app/client/users.js",
+			"js/app/client/util.js",
+			"js/app/client/wizard.js",
+			"js/app/client/access.js"
 		]
 
 		css_libs = [
