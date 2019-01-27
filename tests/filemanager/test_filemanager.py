@@ -301,24 +301,9 @@ class FileManagerTest(unittest.TestCase):
 		                pos=pos,
 		                date=now)
 
-		mock_yaml_safe_dump.assert_called_with(expected, stream=mock_atomic_write_handle, default_flow_style=False, indent=2, allow_unicode=True)
 
-	@mock.patch("octoprint.util.atomic_write", create=True)
-	@mock.patch("yaml.safe_dump", create=True)
-	@mock.patch("time.time")
-	def test_save_recovery_data_with_error(self, mock_time, mock_yaml_safe_dump, mock_atomic_write):
-		import os
-
-		path = "some_file.gco"
-		pos = 1234
-		recovery_file = os.path.join("/path/to/a/base_folder", "print_recovery_data.yaml")
-
-		self.local_storage.path_in_storage.return_value = path
-
-		mock_yaml_safe_dump.side_effect = RuntimeError
-
-		with mock.patch("{}.open".format(BUILTINS), mock.mock_open(), create=True) as m:
-		  self.file_manager.save_recovery_data(octoprint.filemanager.FileDestinations.LOCAL, path, pos)
+		mock_atomic_write.assert_called_with(recovery_file, max_permissions=0o666)
+		mock_yaml_safe_dump.assert_called_with(expected, stream=mock_atomic_write_handle, default_flow_style=False, indent="  ", allow_unicode=True)
 
 	@mock.patch("os.path.isfile")
 	@mock.patch("os.remove")
@@ -351,24 +336,24 @@ class FileManagerTest(unittest.TestCase):
 
 	@mock.patch("os.path.isfile", return_value=True)
 	def test_get_recovery_data(self, mock_isfile):
-		import os
-		import yaml
-		recovery_file = os.path.join("/path/to/a/base_folder", "print_recovery_data.yaml")
+	  import os
+	  import yaml
+	  recovery_file = os.path.join("/path/to/a/base_folder", "print_recovery_data.yaml")
 
-		data = dict(path="some_path.gco",
-		            origin="local",
-		            pos=1234,
-		            date=123456789)
-		text_data = yaml.dump(data)
+	  data = dict(path="some_path.gco",
+	              origin="local",
+	              pos=1234,
+	              date=123456789)
+	  text_data = yaml.dump(data)
 
-		with mock.patch("{}.open".format(BUILTINS), mock.mock_open(read_data=text_data)) as m:
-			# moved safe_load to here so we could mock up the return value properly
-			with mock.patch("yaml.safe_load", return_value=data) as n:
-				result = self.file_manager.get_recovery_data()
+	  with mock.patch("__builtin__.open", mock.mock_open(read_data=text_data)) as m:
+	    # moved safe_load to here so we could mock up the return value properly
+	    with mock.patch("yaml.safe_load", return_value=data) as n:
+	      result = self.file_manager.get_recovery_data()
 
-				self.assertDictEqual(data, result)
-				n.assert_called_with(m())
-				mock_isfile.assert_called_with(recovery_file)
+	      self.assertDictEqual(data, result)
+	      n.assert_called_with(m())
+	      mock_isfile.assert_called_with(recovery_file)
 
 	@mock.patch("os.path.isfile")
 	def test_get_recovery_data_no_file(self, mock_isfile):

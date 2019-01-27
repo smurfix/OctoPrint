@@ -14,6 +14,9 @@ import octoprint_setuptools
 
 #-----------------------------------------------------------------------------------------------------------------------
 
+# Supported python versions
+PYTHON_REQUIRES = ">=2.7.9,<3"
+
 # Requirements for our application
 FLASK_VERSION_STRING = "flask>=0.12,<0.13"
 JINJA_VERSION_STRING = "Jinja2>=2.8.1,<2.9", # Jinja 2.9 has breaking changes WRT template scope - we can't
@@ -21,50 +24,61 @@ JINJA_VERSION_STRING = "Jinja2>=2.8.1,<2.9", # Jinja 2.9 has breaking changes WR
 	                    # version, hence we need to pin to a lower version for now. See #1697
 PYYAML_VERSION_STRING = "PyYAML>=3.12,<3.13"
 WERKZEUG_VERSION_STRING = "werkzeug>=0.11.1,<0.12"
-NOSE_VERSION_STRING = "nose>=1.3.0,<1.4"
+NOSE_VERSION_STRING = "nose>=1.3.7,<1.4",
 
 if PY3:
+	PYTHON_REQUIRES = ">=3.5"
 	FLASK_VERSION_STRING = "flask>=1.0.2"
 	PYYAML_VERSION_STRING = "PyYAML>=3.13"
 	JINJA_VERSION_STRING = "Jinja2>=2.10"
 	WERKZEUG_VERSION_STRING = "werkzeug>=0.14"
 	NOSE_VERSION_STRING = "nose>=1.3.7"
 INSTALL_REQUIRES = [
-	FLASK_VERSION_STRING,
-	WERKZEUG_VERSION_STRING,
-	"tornado==4.5.3",
-	JINJA_VERSION_STRING,
 	#"sockjs-tornado>=1.0.3,<1.1", # current version is incompatible to tornado 5, we use a
 	                               # vendored one
 	PYYAML_VERSION_STRING,
-	"Flask-Login>=0.4,<0.5",
+	# the following dependencies are non trivial to update since later versions introduce backwards incompatible
+	# changes that might affect plugins, or due to other observed problems
+
+	FLASK_VERSION_STRING,        # newer versions require newer Jinja versions
+	WERKZEUG_VERSION_STRING,
+	JINJA_VERSION_STRING,        # Jinja 2.9 has breaking changes WRT template scope - we can't
+	                             # guarantee backwards compatibility for plugins and such with that
+	                             # version, hence we need to pin to a lower version for now. See #1697
+	"tornado==4.5.3",            # a memory leak was observed in tornado >= 5, see #2585
+	"Flask-Login>=0.2.11,<0.3",  # some functions changed to properties in 0.3
+	"regex!=2018.11.6",          # avoid broken 2018.11.6. See #2874
+
+	# anything below this should be checked on releases for new versions
+
 	"Flask-Principal>=0.4,<0.5",
-	"Flask-Babel>=0.11,<0.12",
+	"Flask-Babel>=0.12,<0.13",
 	"Flask-Assets>=0.12,<0.13",
-	"markdown>=2.6.4,<2.7",
+	"PyYAML>=3.13,<4",
+	"markdown>=3.0,<3.1",
 	"pyserial>=3.4,<3.5",
 	"netaddr>=0.7.19,<0.8",
-	"watchdog>=0.8.3,<0.9",
+	"watchdog>=0.9.0,<0.10",
 	"sarge==0.1.5post0",
-	"netifaces>=0.10.6,<0.11",
-	"pylru>=1.0.9,<1.1",
-	"rsa>=3.4,<3.5",
+	"netifaces>=0.10.7,<0.11",
+	"pylru>=1.1,<1.2",
+	"rsa>=4.0,<5",
 	"pkginfo>=1.4.2,<1.5",
-	"requests>=2.18.4,<3",
-	"semantic_version>=2.6.0,<2.7",
-	"psutil>=5.4.6,<5.5",
-	"Click>=6.7,<6.8",
+	"requests>=2.20.0,<3",
+	"semantic_version>=2.6,<2.7",
+	"psutil>=5.4.8,<5.5",
+	"Click>=7,<8",
 	"awesome-slugify>=1.6.5,<1.7",
 	"feedparser>=5.2.1,<5.3",
 	"chainmap>=1.0.2,<1.1",
-	"future>=0.15.2,<0.16",
-	"scandir>=1.3,<1.4",
-	"websocket-client>=0.40.0,<0.41",
-	"python-dateutil>=2.6.1,<2.7",
+	"future>=0.17,<0.18",
+	"scandir>=1.9,<1.10",
+	"websocket-client>=0.53,<0.54",
+	"python-dateutil>=2.7.5,<2.8",
 	"wrapt>=1.10.11,<1.11",
-	"futures>=3.1.1,<3.2",
-	"emoji>=0.4.5,<0.5",
-	"monotonic>=1.3,<1.4",
+	"futures>=3.2,<3.3",
+	"emoji>=0.5.1,<0.6",
+	"monotonic>=1.5,<1.6",
 	"frozendict>=1.2,<1.3"
 ]
 
@@ -89,12 +103,9 @@ EXTRA_REQUIRES = dict(
 
 	# Dependencies for developing OctoPrint plugins
 	plugins=[
-		"cookiecutter>=1.5,<1.7"
+		"cookiecutter>=1.6,<1.7"
 	]
 )
-
-# Additional requirements for setup
-SETUP_REQUIRES = []
 
 # Dependency links for any of the aforementioned dependencies
 DEPENDENCY_LINKS = []
@@ -168,10 +179,10 @@ def params():
 	long_description = read_file_contents(os.path.join(here, "README.md"))
 	long_description_content_type = "text/markdown"
 
+	python_requires = PYTHON_REQUIRES
 	install_requires = INSTALL_REQUIRES
 	extras_require = EXTRA_REQUIRES
 	dependency_links = DEPENDENCY_LINKS
-	setup_requires = SETUP_REQUIRES
 
 	classifiers = [
 		"Development Status :: 5 - Production/Stable",

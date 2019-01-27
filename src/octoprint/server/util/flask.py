@@ -34,6 +34,7 @@ import octoprint.plugin
 
 from octoprint.util import DefaultOrderedDict
 from octoprint.util.json import JsonEncoding
+from octoprint.util.net import is_lan_address
 
 from werkzeug.local import LocalProxy
 from werkzeug.contrib.cache import BaseCache
@@ -253,6 +254,32 @@ def fix_flask_login_remote_address():
 		return address
 
 	flask_login._get_remote_addr = fixed_get_remote_addr
+
+def fix_flask_jsonify():
+	def fixed_jsonify(*args, **kwargs):
+		"""Backported from https://github.com/pallets/flask/blob/7e714bd28b6e96d82b2848b48cf8ff48b517b09b/flask/json/__init__.py#L257"""
+		from flask.json import current_app, dumps
+
+		indent = None
+		separators = (',', ':')
+
+		if current_app.config['JSONIFY_PRETTYPRINT_REGULAR'] or current_app.debug:
+			indent = 2
+			separators = (', ', ': ')
+
+		if args and kwargs:
+			raise TypeError('jsonify() behavior undefined when passed both args and kwargs')
+		elif len(args) == 1:  # single args are passed directly to dumps()
+			data = args[0]
+		else:
+			data = args or kwargs
+
+		return current_app.response_class(
+			dumps(data, indent=indent, separators=separators) + '\n',
+			mimetype='application/json'
+		)
+
+	flask.jsonify = fixed_jsonify
 
 #~~ WSGI environment wrapper for reverse proxying
 
@@ -512,48 +539,81 @@ class OctoPrintSessionInterface(flask.sessions.SecureCookieSessionInterface):
 
 #~~ passive login helper
 
+_cached_local_networks = None
+def _local_networks():
+	global _cached_local_networks
+
+	if _cached_local_networks is None:
+		logger = logging.getLogger(__name__)
+		local_networks = netaddr.IPSet([])
+		for entry in settings().get(["accessControl", "localNetworks"]):
+			network = netaddr.IPNetwork(entry)
+			local_networks.add(network)
+			logger.debug("Added network {} to localNetworks".format(network))
+
+			if network.version == 4:
+				network_v6 = network.ipv6()
+				local_networks.add(network_v6)
+				logger.debug("Also added v6 representation of v4 network {} = {} to localNetworks".format(network, network_v6))
+
+		_cached_local_networks = local_networks
+
+	return _cached_local_networks
+
 def passive_login():
-	user = flask_login.current_user
+	logger = logging.getLogger(__name__)
 
-	if isinstance(user, LocalProxy):
-		# noinspection PyProtectedMember
-		user = user._get_current_object()
+	if octoprint.server.userManager.enabled:
+		user = octoprint.server.userManager.login_user(flask_login.current_user)
+	else:
+		user = flask_login.current_user
 
-	def login(u):
-		# login known user
-		if not u.is_anonymous:
-			u = octoprint.server.userManager.login_user(u)
-		flask_login.login_user(u)
+	remote_address = get_remote_address(flask.request)
+	ip_check_enabled = settings().getBoolean(["server", "ipCheck", "enabled"])
+	ip_check_trusted = settings().get(["server", "ipCheck", "trustedSubnets"])
+
+	if user is not None and not user.is_anonymous() and user.is_active():
 		flask_principal.identity_changed.send(flask.current_app._get_current_object(),
-		                                      identity=flask_principal.Identity(u.get_id()))
-		if hasattr(u, "session"):
-			flask.session["usersession.id"] = u.session
-		flask.g.user = u
-		return u
+		                                      identity=flask_principal.Identity(user.get_id()))
+		if hasattr(user, "session"):
+			flask.session["usersession.id"] = user.session
+		flask.g.user = user
 
-	if user is not None and user.is_active:
-		# login known user
-		user = login(user)
+		logger.info("Passively logging in user {} from {}".format(user.get_id(), remote_address))
+
+		response = user.asDict()
+		response["_is_external_client"] = ip_check_enabled and not is_lan_address(remote_address,
+		                                                                          additional_private=ip_check_trusted)
+		return flask.jsonify(response)
 
 	elif settings().getBoolean(["accessControl", "autologinLocal"]) \
 			and settings().get(["accessControl", "autologinAs"]) is not None \
 			and settings().get(["accessControl", "localNetworks"]) is not None:
 
-		autologinAs = settings().get(["accessControl", "autologinAs"])
-		localNetworks = netaddr.IPSet([])
-		for ip in settings().get(["accessControl", "localNetworks"]):
-			localNetworks.add(ip)
+		autologin_as = settings().get(["accessControl", "autologinAs"])
+		local_networks = _local_networks()
+		logger.debug("Checking if remote address {} is in localNetworks ({!r})".format(remote_address, local_networks))
 
 		try:
-			remoteAddr = get_remote_address(flask.request)
-			if netaddr.IPAddress(remoteAddr) in localNetworks:
-				autologin_user = octoprint.server.userManager.find_user(autologinAs)
-				if autologin_user is not None and user.is_active:
-					autologin_user = octoprint.server.userManager.login_user(autologin_user)
-					user = login(autologin_user)
+			if netaddr.IPAddress(remote_address) in local_networks:
+				user = octoprint.server.userManager.findUser(autologin_as)
+				if user is not None and user.is_active():
+					user = octoprint.server.userManager.login_user(user)
+					flask.session["usersession.id"] = user.session
+					flask.g.user = user
+					flask_login.login_user(user)
+					flask_principal.identity_changed.send(flask.current_app._get_current_object(),
+					                                      identity=flask_principal.Identity(user.get_id()))
+
+					logger.info("Passively logging in user {} from {} via autologin".format(user.get_id(),
+					                                                                        remote_address))
+
+					response = user.asDict()
+					response["_is_external_client"] = ip_check_enabled and not is_lan_address(remote_address,
+					                                                                          additional_private=ip_check_trusted)
+					return flask.jsonify(response)
 		except:
-			logger = logging.getLogger(__name__)
-			logger.exception("Could not autologin user %s for networks %r" % (autologinAs, localNetworks))
+			logger.exception("Could not autologin user {} for networks {}".format(autologin_as, localNetworks))
 
 	return flask.jsonify(user)
 
@@ -1067,8 +1127,8 @@ def permission_validator(request, permission):
 	:param request: The required permission
 	"""
 
-	user = _get_flask_user_from_request(request)
-	if user is None or not user.is_authenticated or not user.has_permission(permission):
+	user = get_flask_user_from_request(request)
+	if user is None or not user.is_authenticated() or not user.is_admin():
 		raise tornado.web.HTTPError(403)
 
 @deprecated("admin_validator is deprecated, please use new permission_validator", since="")
@@ -1078,9 +1138,21 @@ def admin_validator(request):
 
 @deprecated("user_validator is deprecated, please use new permission_validator", since="")
 def user_validator(request):
-	return True
+	"""
+	Validates that the given request is made by an authenticated user, identified either by API key or existing Flask
+	session.
 
-def _get_flask_user_from_request(request):
+	Must be executed in an existing Flask request context!
+
+	:param request: The Flask request object
+	"""
+
+	user = get_flask_user_from_request(request)
+	if user is None or not user.is_authenticated():
+		raise tornado.web.HTTPError(403)
+
+
+def get_flask_user_from_request(request):
 	"""
 	Retrieves the current flask user from the request context. Uses API key if available, otherwise the current
 	user session if available.
@@ -1092,10 +1164,13 @@ def _get_flask_user_from_request(request):
 	import flask_login
 	from octoprint.settings import settings
 
+	user = None
+
 	apikey = octoprint.server.util.get_api_key(request)
 	if settings().getBoolean(["api", "enabled"]) and apikey is not None:
 		user = octoprint.server.util.get_user_for_apikey(apikey)
-	else:
+
+	if user is None:
 		user = flask_login.current_user
 
 	return user
@@ -1125,16 +1200,24 @@ def redirect_to_tornado(request, target, code=302):
 
 def restricted_access(func):
 	"""
+	This combines :py:func:`no_firstrun_access` and ``login_required``.
+	"""
+	@functools.wraps(func)
+	def decorated_view(*args, **kwargs):
+		return no_firstrun_access(flask_login.login_required(func))(*args, **kwargs)
+	return decorated_view
+
+def no_firstrun_access(func):
+	"""
 	If you decorate a view with this, it will ensure that first setup has been
-	done for OctoPrint's Access Control plus that any conditions of the
-	login_required decorator are met (possibly through a session already created
-	by octoprint.server.util.apiKeyRequestHandler earlier in the request processing).
+	done for OctoPrint's Access Control.
 
 	If OctoPrint's Access Control has not been setup yet (indicated by the "firstRun"
 	flag from the settings being set to True and the userManager not indicating
 	that it's user database has been customized from default), the decorator
 	will cause a HTTP 403 status code to be returned by the decorated resource.
 	"""
+
 	@functools.wraps(func)
 	def decorated_view(*args, **kwargs):
 		return require_firstrun(flask_login.login_required(func))(*args, **kwargs)
@@ -1158,11 +1241,9 @@ def require_firstrun(func):
 		if settings().getBoolean(["server", "firstRun"]) and settings().getBoolean(["accessControl", "enabled"]) and (
 				octoprint.server.userManager is None or not octoprint.server.userManager.has_been_customized()):
 			return flask.make_response("OctoPrint isn't setup yet", 403)
-
 		return func(*args, **kwargs)
 
 	return decorated_view
-
 
 def firstrun_only_access(func):
 	"""
@@ -1342,6 +1423,7 @@ class SettingsCheckUpdater(webassets.updater.BaseUpdater):
 def collect_core_assets(enable_gcodeviewer=True, preferred_stylesheet="css"):
 	assets = dict(
 		js=[],
+		clientjs=[],
 		css=[],
 		less=[]
 	)
@@ -1385,6 +1467,26 @@ def collect_core_assets(enable_gcodeviewer=True, preferred_stylesheet="css"):
 			'gcodeviewer/js/renderer.js'
 		]
 
+	assets["clientjs"] = [
+		"js/app/client/base.js",
+		"js/app/client/socket.js",
+		"js/app/client/browser.js",
+		"js/app/client/connection.js",
+		"js/app/client/control.js",
+		"js/app/client/files.js",
+		"js/app/client/job.js",
+		"js/app/client/languages.js",
+		"js/app/client/printer.js",
+		"js/app/client/printerprofiles.js",
+		"js/app/client/settings.js",
+		"js/app/client/slicing.js",
+		"js/app/client/system.js",
+		"js/app/client/timelapse.js",
+		"js/app/client/users.js",
+		"js/app/client/util.js",
+		"js/app/client/wizard.js"
+	]
+
 	if preferred_stylesheet == "less":
 		assets["less"].append('less/octoprint.less')
 	elif preferred_stylesheet == "css":
@@ -1399,9 +1501,11 @@ def collect_plugin_assets(enable_gcodeviewer=True, preferred_stylesheet="css"):
 
 	supported_stylesheets = ("css", "less")
 	assets = dict(bundled=dict(js=DefaultOrderedDict(list),
+	                           clientjs=DefaultOrderedDict(list),
 	                           css=DefaultOrderedDict(list),
 	                           less=DefaultOrderedDict(list)),
 	              external=dict(js=DefaultOrderedDict(list),
+	                            clientjs=DefaultOrderedDict(list),
 	                            css=DefaultOrderedDict(list),
 	                            less=DefaultOrderedDict(list)))
 
@@ -1430,6 +1534,12 @@ def collect_plugin_assets(enable_gcodeviewer=True, preferred_stylesheet="css"):
 				if not asset_exists("js", asset):
 					continue
 				assets[asset_key]["js"][name].append('plugin/{name}/{asset}'.format(**locals()))
+
+		if "clientjs" in all_assets:
+			for asset in all_assets["clientjs"]:
+				if not asset_exists("clientjs", asset):
+					continue
+				assets[asset_key]["clientjs"][name].append("plugin/{name}/{asset}".format(**locals()))
 
 		if preferred_stylesheet in all_assets:
 			for asset in all_assets[preferred_stylesheet]:

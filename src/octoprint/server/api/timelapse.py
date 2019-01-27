@@ -119,6 +119,7 @@ def getTimelapseData():
 		finished_list.append(output)
 
 	result = dict(config=config,
+	              enabled=settings().getBoolean(["webcam", "timelapseEnabled"]),
 	              files=finished_list)
 
 	if unrendered:

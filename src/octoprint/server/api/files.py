@@ -23,6 +23,7 @@ import octoprint.filemanager.util
 import octoprint.filemanager.storage
 import octoprint.slicing
 
+import os
 import psutil
 import hashlib
 import logging
@@ -143,7 +144,7 @@ def readGcodeFilesForOrigin(origin):
 
 
 def _getFileDetails(origin, path, recursive=True):
-	parent, path = fileManager.split_path(origin, path)
+	parent, path = os.path.split(path)
 	files = _getFileList(origin, path=parent, recursive=recursive)
 
 	for f in files:
@@ -347,7 +348,9 @@ def uploadGcodeFile(target):
 			"""
 
 			if destination == FileDestinations.SDCARD and octoprint.filemanager.valid_file_type(filename, "machinecode"):
-				return filename, printer.add_sd_file(filename, absFilename, selectAndOrPrint, tags={"source:api", "api:files.sd"})
+				return filename, printer.add_sd_file(filename, absFilename,
+				                                     on_success=selectAndOrPrint,
+				                                     tags={"source:api", "api:files.sd"})
 			else:
 				selectAndOrPrint(filename, absFilename, destination)
 				return filename

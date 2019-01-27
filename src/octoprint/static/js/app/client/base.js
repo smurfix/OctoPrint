@@ -111,6 +111,9 @@
         additional = additional || {};
 
         var headers = $.extend({}, additional);
+        if (this.options.apikey) {
+            headers["X-Api-Key"] = this.options.apikey;
+        }
 
         if (this.options.apikey) {
             headers["X-Api-Key"] = this.options.apikey;
