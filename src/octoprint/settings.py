@@ -1499,7 +1499,7 @@ class Settings(object):
 			else:
 				return intValue
 		except ValueError:
-			self._logger.warning("Could not convert %r to a valid integer when getting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when getting option %r", value, path)
 			return None
 
 	def getFloat(self, path, **kwargs):
@@ -1520,7 +1520,7 @@ class Settings(object):
 			else:
 				return floatValue
 		except ValueError:
-			self._logger.warning("Could not convert %r to a valid integer when getting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when getting option %r", value, path)
 			return None
 
 	def getBoolean(self, path, **kwargs):
@@ -1701,7 +1701,7 @@ class Settings(object):
 			if maximum is not None and intValue > maximum:
 				intValue = maximum
 		except ValueError:
-			self._logger.warning("Could not convert %r to a valid integer when setting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when setting option %r", value, path)
 			return
 
 		self.set(path, intValue, **kwargs)
@@ -1722,7 +1722,7 @@ class Settings(object):
 			if maximum is not None and floatValue > maximum:
 				floatValue = maximum
 		except ValueError:
-			self._logger.warning("Could not convert %r to a valid integer when setting option %r" % (value, path))
+			self._logger.warning("Could not convert %r to a valid integer when setting option %r", value, path)
 			return
 
 		self.set(path, floatValue, **kwargs)

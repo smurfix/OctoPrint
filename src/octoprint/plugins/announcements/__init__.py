@@ -339,7 +339,7 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 			if self._connectivity_checker.online:
 				data = self._get_channel_data_from_network(key, config)
 			else:
-				self._logger.info("Looks like we are offline, can't fetch announcements for channel {} from network".format(key))
+				self._logger.info("Looks like we are offline, can't fetch announcements for channel %s from network", key)
 
 		return data
 
@@ -358,7 +358,7 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 			now = time.time()
 			if os.stat(channel_path).st_mtime + ttl > now:
 				d = feedparser.parse(channel_path)
-				self._logger.debug(u"Loaded channel {} from cache at {}".format(key, channel_path))
+				self._logger.debug(u"Loaded channel %s from cache at %s"; key, channel_path)
 				return d
 
 		return None
@@ -373,7 +373,7 @@ class AnnouncementPlugin(octoprint.plugin.AssetPlugin,
 			start = time.time()
 			r = requests.get(url, timeout=30)
 			r.raise_for_status()
-			self._logger.info(u"Loaded channel {} from {} in {:.2}s".format(key, config["url"], time.time() - start))
+			self._logger.info(u"Loaded channel %s from %s in %.2fs", key, config["url"], time.time() - start)
 		except Exception as e:
 			self._logger.exception(
 				u"Could not fetch channel {} from {}: {}".format(key, config["url"], str(e)))

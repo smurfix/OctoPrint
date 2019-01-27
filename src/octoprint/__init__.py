@@ -395,7 +395,7 @@ def init_pluginsystem(settings, safe_mode=False, ignore_blacklist=True, connecti
 				disabled_from_overlays[name] = (disabled_plugins, order)
 
 			settings_overlays[name] = overlay
-			logger.debug("Found settings overlay on plugin {}".format(name))
+			logger.debug("Found settings overlay on plugin %s", name)
 
 	def handle_plugins_loaded(startup=False, initialize_implementations=True, force_reload=None):
 		if not startup:
@@ -412,17 +412,17 @@ def init_pluginsystem(settings, safe_mode=False, ignore_blacklist=True, connecti
 						continue
 
 					if addon in already_processed:
-						logger.info("Plugin {} wants to disable plugin {}, but that was already processed".format(name, addon))
+						logger.info("Plugin %s wants to disable plugin %s, but that was already processed", name, addon)
 
 					if not addon in already_processed and not addon in disabled_list:
 						disabled_list.append(addon)
-						logger.info("Disabling plugin {} as defined by plugin {}".format(addon, name))
+						logger.info("Disabling plugin %s as defined by plugin %s", addon, name)
 				already_processed.append(name)
 
 	def handle_plugin_enabled(name, plugin):
 		if name in settings_overlays:
 			settings.add_overlay(settings_overlays[name])
-			logger.info("Added settings overlay from plugin {}".format(name))
+			logger.info("Added settings overlay from plugin %s", name)
 
 	pm.on_plugin_loaded = handle_plugin_loaded
 	pm.on_plugins_loaded = handle_plugins_loaded
@@ -465,14 +465,14 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 				continue
 
 			if "version" in entry:
-				logger.debug("Blacklisted plugin: {}, version: {}".format(entry["plugin"], entry["version"]))
+				logger.debug("Blacklisted plugin: %s, version: %s", entry["plugin"], entry["version"])
 				result.append((entry["plugin"], entry["version"]))
 			elif "versions" in entry:
-				logger.debug("Blacklisted plugin: {}, versions: {}".format(entry["plugin"], ", ".join(entry["versions"])))
+				logger.debug("Blacklisted plugin: %s, versions: %s", entry["plugin"], ", ".join(entry["versions"]))
 				for version in entry["versions"]:
 					result.append((entry["plugin"], version))
 			else:
-				logger.debug("Blacklisted plugin: {}".format(entry["plugin"]))
+				logger.debug("Blacklisted plugin: %s", entry["plugin"])
 				result.append(entry["plugin"])
 
 		return result
@@ -503,7 +503,7 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 				except:
 					logger.info("Fetched plugin blacklist but couldn't write it to its cache file.")
 		except:
-			logger.info("Unable to fetch plugin blacklist from {}, proceeding without it.".format(url))
+			logger.info("Unable to fetch plugin blacklist from %s, proceeding without it.", url)
 		return result
 
 	try:

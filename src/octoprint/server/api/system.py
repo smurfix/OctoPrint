@@ -24,7 +24,7 @@ from octoprint.logging import prefix_multilines
 @no_firstrun_access
 @Permissions.SYSTEM.require(403)
 def performSystemAction():
-	logging.getLogger(__name__).warn("Deprecated API call to /api/system made by {}, should be migrated to use /system/commands/custom/<action>".format(get_remote_address(request)))
+	logging.getLogger(__name__).warning("Deprecated API call to /api/system made by {}, should be migrated to use /system/commands/custom/<action>".format(get_remote_address(request)))
 
 	data = request.get_json(silent=True)
 	if data is None:
@@ -195,7 +195,7 @@ def _get_core_command_specs():
 def _get_core_command_spec(action):
 	available_actions = _get_core_command_specs()
 	if not action in available_actions:
-		logging.getLogger(__name__).warn("Command for core action {} is not configured, you need to configure the command before it can be used".format(action))
+		logging.getLogger(__name__).warning("Command for core action {} is not configured, you need to configure the command before it can be used".format(action))
 		return None
 
 	return available_actions[action]

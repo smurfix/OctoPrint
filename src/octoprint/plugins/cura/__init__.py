@@ -143,14 +143,14 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 			                                   display_name=profile_display_name,
 			                                   description=profile_description)
 		except octoprint.slicing.ProfileAlreadyExists:
-			self._logger.warning(u"Profile {profile_name} already exists, aborting".format(**locals()))
+			self._logger.warning(u"Profile %s already exists, aborting", profile_name)
 			return flask.make_response(u"A profile named {profile_name} already exists for slicer cura".format(**locals()), 409)
 
 		if profile_make_default:
 			try:
 				self._slicing_manager.set_default_profile("cura", profile_name)
 			except octoprint.slicing.UnknownProfile:
-				self._logger.warning(u"Profile {profile_name} could not be set as default, aborting".format(**locals()))
+				self._logger.warning(u"Profile %s could not be set as default, aborting", profile_name)
 				return flask.make_response(u"The profile {profile_name} for slicer cura could not be set as default".format(**locals()), 500)
 
 		result = dict(
@@ -270,10 +270,10 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 					if not on_progress_kwargs:
 						on_progress_kwargs = dict()
 
-				self._cura_logger.info(u"### Slicing {} to {} using profile stored at {}"
-				                       .format(to_unicode(model_path, errors="replace"),
-				                               to_unicode(machinecode_path, errors="replace"),
-				                               to_unicode(profile_path, errors="replace")))
+				self._cura_logger.info(u"### Slicing %s to %s using profile stored at %s",
+				                       to_unicode(model_path, errors="replace"),
+				                       to_unicode(machinecode_path, errors="replace"),
+				                       to_unicode(profile_path, errors="replace"))
 
 				executable = normalize_path(self._settings.get(["cura_engine"]))
 				if not executable:
@@ -308,9 +308,9 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 					args += ["-s", "%s=%s" % (k, str(v))]
 				args += ["-o", machinecode_path, model_path]
 
-				self._logger.info(u"Running {!r} in {}".format(u" ".join(map(lambda x: to_unicode(x, errors="replace"),
+				self._logger.info(u"Running %r in %s", u" ".join(map(lambda x: to_unicode(x, errors="replace"),
 				                                                             args)),
-				                                               working_dir))
+				                                               working_dir)
 
 				import sarge
 				p = sarge.run(args, cwd=working_dir, async_=True, stdout=sarge.Capture(), stderr=sarge.Capture())
@@ -429,7 +429,7 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 			if p.returncode == 0:
 				return True, dict(analysis=analysis)
 			else:
-				self._logger.warning(u"Could not slice via Cura, got return code %r" % p.returncode)
+				self._logger.warning(u"Could not slice via Cura, got return code %r", p.returncode)
 				return False, "Got returncode %r" % p.returncode
 
 		except octoprint.slicing.SlicingCancelled as e:
@@ -454,8 +454,7 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 				command = self._slicing_commands[machinecode_path]
 				if command is not None:
 					command.terminate()
-				self._logger.info(u"Cancelled slicing of {}"
-				                  .format(to_unicode(machinecode_path, errors="replace")))
+				self._logger.info(u"Cancelled slicing of %s", to_unicode(machinecode_path, errors="replace"))
 
 	def _load_profile(self, path):
 		import yaml

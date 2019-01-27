@@ -368,7 +368,7 @@ class Profile(object):
 
 		import os
 		if not os.path.exists(path) or not os.path.isfile(path):
-			logger.warning("Path {path} does not exist or is not a file, cannot import".format(**locals()))
+			logger.warning("Path %s does not exist or is not a file, cannot import", path)
 			return None
 
 		try:
@@ -379,7 +379,7 @@ class Profile(object):
 		try:
 			config.read(path)
 		except:
-			logger.exception("Error while reading profile INI file from {path}".format(**locals()))
+			logger.exception("Error while reading profile INI file from %s", path)
 			return None
 
 		arrayified_options = ["print_temperature", "filament_diameter", "start.gcode", "end.gcode"]

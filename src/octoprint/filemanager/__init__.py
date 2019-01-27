@@ -83,7 +83,7 @@ def full_extension_tree():
 				continue
 			result = octoprint.util.dict_merge(result, hook_result, leaf_merger=leaf_merger)
 		except:
-			logging.getLogger(__name__).exception("Exception while retrieving additional extension tree entries from hook {name}".format(name=name))
+			logging.getLogger(__name__).exception("Exception while retrieving additional extension tree entries from hook %s", name)
 
 	return result
 
@@ -262,9 +262,9 @@ class FileManager(object):
 				counter += 1
 
 		if root:
-			self._logger.info("Added {counter} items from storage type \"{storage_type}\" and root \"{root}\" to analysis queue".format(**locals()))
+			self._logger.info("Added %s items from storage type %r and root %r to analysis queue", counter, storage_type, root)
 		else:
-			self._logger.info("Added {counter} items from storage type \"{storage_type}\" to analysis queue".format(**locals()))
+			self._logger.info("Added %s items from storage type %r to analysis queue", counter, storage_type)
 
 	def add_storage(self, storage_type, storage_manager):
 		self._storage_managers[storage_type] = storage_manager
@@ -464,7 +464,7 @@ class FileManager(object):
 			try:
 				hook_file_object = hook(path, file_object, links=links, printer_profile=printer_profile, allow_overwrite=allow_overwrite)
 			except:
-				self._logger.exception("Error when calling preprocessor hook {}, ignoring".format(hook))
+				self._logger.exception("Error when calling preprocessor hook %s, ignoring", hook)
 				continue
 
 			if hook_file_object is not None:
@@ -626,7 +626,7 @@ class FileManager(object):
 			with atomic_write(self._recovery_file, max_permissions=0o666) as f:
 				yaml.safe_dump(data, stream=f, default_flow_style=False, indent=2, allow_unicode=True)
 		except:
-			self._logger.exception("Could not write recovery data to file {}".format(self._recovery_file))
+			self._logger.exception("Could not write recovery data to file %s", self._recovery_file)
 
 	def delete_recovery_data(self):
 		if not os.path.isfile(self._recovery_file):
@@ -635,7 +635,7 @@ class FileManager(object):
 		try:
 			os.remove(self._recovery_file)
 		except:
-			self._logger.exception("Error deleting recovery data file {}".format(self._recovery_file))
+			self._logger.exception("Error deleting recovery data file %s", self._recovery_file)
 
 	def get_recovery_data(self):
 		if not os.path.isfile(self._recovery_file):
@@ -647,7 +647,7 @@ class FileManager(object):
 				data = yaml.safe_load(f)
 			return data
 		except:
-			self._logger.exception("Could not read recovery data from file {}".format(self._recovery_file))
+			self._logger.exception("Could not read recovery data from file %s", self._recovery_file)
 			self.delete_recovery_data()
 
 	def set_additional_metadata(self, destination, path, key, data, overwrite=False, merge=False):

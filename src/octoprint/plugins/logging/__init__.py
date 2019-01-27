@@ -196,7 +196,7 @@ class LoggingPlugin(octoprint.plugin.AssetPlugin,
 		for logger, level in new_levels.items():
 			level = logging.getLevelName(level)
 
-			self._logger.info("Setting logger {} level to {}".format(logger, level))
+			self._logger.info("Setting logger %s level to %s", logger, level)
 			self._logger.manager.loggerDict[logger].setLevel(level)
 
 	def _is_managed_logger(self, logger):

@@ -1672,7 +1672,7 @@ class MachineCom(object):
 
 					if valid_file_type(filename, "machinecode"):
 						if filter_non_ascii(filename):
-							self._logger.warning("Got a file from printer's SD that has a non-ascii filename (%s), that shouldn't happen according to the protocol" % filename)
+							self._logger.warning("Got a file from printer's SD that has a non-ascii filename (%s), that shouldn't happen according to the protocol", filename)
 						else:
 							if not filename.startswith("/"):
 								# file from the root of the sd -- we'll prepend a /
@@ -2665,7 +2665,7 @@ class MachineCom(object):
 							return line
 
 				self._to_logfile_with_terminal(u"Received an error from the printer's firmware: {}".format(stripped_error),
-				                               level=logging.WARN)
+				                               level=logging.WARNING)
 
 				if not self._ignore_errors:
 					if self._disconnect_on_errors or any(map(lambda x: x in lower_line, self._fatal_errors)):
@@ -2710,7 +2710,7 @@ class MachineCom(object):
 			try:
 				self._log("Recv: " + sanitize_ascii(ret))
 			except ValueError as e:
-				self._log("WARN: While reading last line: %s" % e)
+				self._log("WARN: While reading last line: %s", e)
 				self._log("Recv: " + repr(ret))
 
 		for name, hook in self._received_message_hooks.items():
@@ -4260,7 +4260,7 @@ def convert_feedback_controls(configured_controls):
 					result[key]["matcher"] = re.compile(control["regex"])
 					result[key]["pattern"] = control["regex"]
 				except Exception as exc:
-					logging.getLogger(__name__).warn("Invalid regex {regex} for custom control: {exc}".format(regex=control["regex"], exc=str(exc)))
+					logging.getLogger(__name__).warning("Invalid regex {regex} for custom control: {exc}".format(regex=control["regex"], exc=str(exc)))
 
 			result[key]["templates"][control["template_key"]] = control["template"]
 

@@ -60,7 +60,7 @@ def get_latest(target, check, online=True):
 	information["remote"] = dict(name=remote_name, value=remote_commit)
 	is_current = (current is not None and current == remote_commit) or remote_commit is None
 
-	logger.debug("Target: %s, local: %s, remote: %s" % (target, current, remote_commit))
+	logger.debug("Target: %s, local: %s, remote: %s", target, current, remote_commit)
 
 	return information, is_current
 

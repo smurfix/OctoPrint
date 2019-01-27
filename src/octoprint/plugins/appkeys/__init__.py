@@ -283,7 +283,7 @@ class AppKeysPlugin(octoprint.plugin.AssetPlugin,
 			                                 self._pending_decisions)
 			len_after = len(self._pending_decisions)
 			if len_after < len_before:
-				self._logger.info("Deleted {} stale pending authorization requests".format(len_before - len_after))
+				self._logger.info("Deleted %s stale pending authorization requests", len_before - len_after)
 
 	def _set_decision(self, user_token, decision, user_id):
 		with self._pending_lock:
@@ -369,7 +369,7 @@ class AppKeysPlugin(octoprint.plugin.AssetPlugin,
 				with codecs.open(self._key_path, "rb", encoding="utf-8", errors="strict") as f:
 					persisted = yaml.safe_load(f)
 			except:
-				self._logger.exception("Could not load application keys from {}".format(self._key_path))
+				self._logger.exception("Could not load application keys from %s", self._key_path)
 				return
 
 			if not isinstance(persisted, dict):
@@ -390,7 +390,7 @@ class AppKeysPlugin(octoprint.plugin.AssetPlugin,
 				with atomic_write(self._key_path) as f:
 					yaml.safe_dump(to_persist, f)
 			except:
-				self._logger.exception("Could not write application keys to {}".format(self._key_path))
+				self._logger.exception("Could not write application keys to %s", self._key_path)
 
 __plugin_name__ = u"Application Keys Plugin"
 __plugin_description__ = u"Implements a workflow for third party clients to obtain API keys"

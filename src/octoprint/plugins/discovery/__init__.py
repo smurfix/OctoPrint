@@ -199,7 +199,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 		while True:
 			try:
 				self._sd_refs[key] = pybonjour.DNSServiceRegister(**params)
-				self._logger.info(u"Registered '{name}' for {regtype}".format(**params))
+				self._logger.info(u"Registered %r for %s", name, regtype)
 				return True
 			except pybonjour.BonjourError as be:
 				if be.errorCode == pybonjour.kDNSServiceErr_NameConflict:
@@ -231,9 +231,9 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 		sd_ref = self._sd_refs[key]
 		try:
 			sd_ref.close()
-			self._logger.debug("Unregistered {reg_type} on port {port}".format(reg_type=reg_type, port=port))
+			self._logger.debug("Unregistered %s on port %s", regtype, port)
 		except:
-			self._logger.exception("Could not unregister {reg_type} on port {port}".format(reg_type=reg_type, port=port))
+			self._logger.exception("Could not unregister %s on port %s", reg_type, port)
 
 	def zeroconf_browse(self, service_type, block=True, callback=None, browse_timeout=5, resolve_timeout=5):
 		"""
@@ -297,7 +297,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 				name = fullname[:fullname.find(service_type) - 1].replace("\\032", " ")
 				host = hosttarget[:-1]
 
-				self._logger.debug("Resolved a result for Zeroconf resolution of {service_type}: {name} @ {host}".format(service_type=service_type, name=name, host=host))
+				self._logger.debug("Resolved a result for Zeroconf resolution of %s: %s @ %s", service_type, name, host)
 				result.append(dict(
 					name=name,
 					host=host,
@@ -313,7 +313,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 			if not (flags & pybonjour.kDNSServiceFlagsAdd):
 				return
 
-			self._logger.debug("Got a browsing result for Zeroconf resolution of {service_type}, resolving...".format(service_type=service_type))
+			self._logger.debug("Got a browsing result for Zeroconf resolution of %s, resolving..."; service_type)
 			resolve_ref = pybonjour.DNSServiceResolve(0, interface_index, service_name, regtype, reply_domain, resolve_callback)
 
 			try:
@@ -328,7 +328,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 			finally:
 				resolve_ref.close()
 
-		self._logger.debug("Browsing Zeroconf for {service_type}".format(service_type=service_type))
+		self._logger.debug("Browsing Zeroconf for %s", service_type)
 
 		def browse():
 			sd_ref = pybonjour.DNSServiceBrowse(regtype=service_type, callBack=browse_callback)
@@ -581,7 +581,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 
 				location = "http://{addr}:{port}/plugin/discovery/discovery.xml".format(addr=addr, port=self.port)
 
-				self._logger.debug("Sending NOTIFY {} via {}".format("alive" if alive else "byebye", addr))
+				self._logger.debug("Sending NOTIFY %s via %s", "alive" if alive else "byebye", addr)
 				notify_message = "".join([
 					"NOTIFY * HTTP/1.1\r\n",
 					"Server: Python/2.7\r\n",
@@ -653,7 +653,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 
 		sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(self.__class__.ssdp_multicast_addr) + socket.inet_aton('0.0.0.0'))
 
-		self._logger.info(u"Registered {} for SSDP".format(self.get_instance_name()))
+		self._logger.info(u"Registered %s for SSDP", self.get_instance_name())
 
 		self._ssdp_notify(alive=True)
 
@@ -665,11 +665,11 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 					if not request.error_code and request.command == "M-SEARCH" and request.path == "*" and (request.headers["ST"] == "upnp:rootdevice" or request.headers["ST"] == "ssdp:all") and request.headers["MAN"] == '"ssdp:discover"':
 						interface_address = octoprint.util.address_for_client(*address)
 						if not interface_address:
-							self._logger.warning("Can't determine address to user for client {}, not sending a M-SEARCH reply".format(address))
+							self._logger.warning("Can't determine address to user for client %s, not sending a M-SEARCH reply", address)
 							continue
 						message = location_message.format(uuid=self.get_uuid(), location="http://{host}:{port}/plugin/discovery/discovery.xml".format(host=interface_address, port=self.port))
 						sock.sendto(message, address)
-						self._logger.debug("Sent M-SEARCH reply for {path} and {st} to {address!r}".format(path=request.path, st=request.headers["ST"], address=address))
+						self._logger.debug("Sent M-SEARCH reply for %s and %s to %r", request.path, request.headers["ST"], address)
 				except socket.timeout:
 					pass
 				finally:

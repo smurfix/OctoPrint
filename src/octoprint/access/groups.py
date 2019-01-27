@@ -152,7 +152,7 @@ class GroupManager(object):
 			try:
 				getattr(listener, method)(group, *args, **kwargs)
 			except:
-				self._logger.exception("Error notifying listener {!r} via {}".format(listener, method))
+				self._logger.exception("Error notifying listener %r via %s", listener, method)
 
 class GroupChangeListener(object):
 
@@ -223,7 +223,7 @@ class FilebasedGroupManager(GroupManager):
 						                          changeable=changeable,
 						                          toggleable=toggleable)
 			except:
-				self._logger.exception("Error while loading groups from file {}".format(self._groupfile))
+				self._logger.exception("Error while loading groups from file %s", self._groupfile)
 
 	def _save(self, force=False):
 		if self._groupfile is None or not self._dirty and not force:

@@ -93,10 +93,10 @@ class Printer(PrinterInterface, comm.MachineComPrintCallback):
 			try:
 				estimator = hook()
 				if estimator is not None:
-					self._logger.info("Using print time estimator provided by {}".format(name))
+					self._logger.info("Using print time estimator provided by %s", name)
 					self._estimator_factory = estimator
 			except:
-				self._logger.exception("Error while processing analysis queues from {}".format(name))
+				self._logger.exception("Error while processing analysis queues from %s", name)
 
 		#hook card upload
 		self.sd_card_upload_hooks = plugin_manager().get_hooks("octoprint.printer.sdcardupload")

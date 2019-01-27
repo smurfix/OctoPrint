@@ -390,7 +390,7 @@ class TrackingPlugin(octoprint.plugin.SettingsPlugin,
 			             params=params,
 			             timeout=3.1,
 			             headers=headers)
-			self._logger.info("Sent tracking event {}, payload: {!r}".format(event, kwargs))
+			self._logger.info("Sent tracking event %s, payload: %r", event, kwargs)
 		except:
 			if self._logger.isEnabledFor(logging.DEBUG):
 				self._logger.exception("Error while sending event to anonymous usage tracking".format(url))

@@ -89,9 +89,9 @@ class UserManager(GroupChangeListener, object):
 
 		for listener in self._login_status_listeners:
 			try: listener.on_user_logged_in(user)
-			except: self._logger.exception("Error in on_user_logged_in on {!r}".format(listener))
+			except: self._logger.exception("Error in on_user_logged_in on %r", listener)
 
-		self._logger.debug("Logged in user: %r" % user)
+		self._logger.debug("Logged in user: %r", user)
 
 		return user
 
@@ -119,9 +119,9 @@ class UserManager(GroupChangeListener, object):
 
 		for listener in self._login_status_listeners:
 			try: listener.on_user_logged_out(user)
-			except: self._logger.exception("Error in on_user_logged_out on {!r}".format(listener))
+			except: self._logger.exception("Error in on_user_logged_out on %r", listener)
 
-		self._logger.debug("Logged out user: %r" % user)
+		self._logger.debug("Logged out user: %r", user)
 
 	def _cleanup_sessions(self):
 		import time
@@ -247,7 +247,7 @@ class UserManager(GroupChangeListener, object):
 		return False
 
 	def on_group_removed(self, group):
-		self._logger.debug("Group {} got removed, removing from all users".format(group.key))
+		self._logger.debug("Group %s got removed, removing from all users", group.key)
 		self.remove_groups_from_users([group])
 
 	def on_group_permissions_changed(self, group, added=None, removed=None):
@@ -257,7 +257,7 @@ class UserManager(GroupChangeListener, object):
 				for user in users:
 					listener.on_user_modified(user)
 			except:
-				self._logger.exception("Error in on_user_modified on {!r}".format(listener))
+				self._logger.exception("Error in on_user_modified on %r", listener)
 
 	def _trigger_on_user_modified(self, user):
 		if isinstance(user, basestring):
@@ -286,14 +286,14 @@ class UserManager(GroupChangeListener, object):
 				for user in users:
 					listener.on_user_modified(user)
 			except:
-				self._logger.exception("Error in on_user_modified on {!r}".format(listener))
+				self._logger.exception("Error in on_user_modified on %r", listener)
 
 	def _trigger_on_user_removed(self, username):
 		for listener in self._login_status_listeners:
 			try:
 				listener.on_user_removed(username)
 			except:
-				self._logger.exception("Error in on_user_removed on {!r}".format(listener))
+				self._logger.exception("Error in on_user_removed on %r", listener)
 
 	#~~ Deprecated methods follow
 
@@ -447,7 +447,7 @@ class FilebasedUserManager(UserManager):
 
 					# migrate from roles to permissions
 					if "roles" in attributes and not "permissions" in attributes:
-						self._logger.info("Migrating user {} to new granular permission system".format(name))
+						self._logger.info("Migrating user %s to new granular permission system", name)
 
 						groups |= set(self._migrate_roles_to_groups(attributes["roles"]))
 						self._dirty = True

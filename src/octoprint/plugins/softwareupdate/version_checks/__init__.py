@@ -17,4 +17,4 @@ def log_github_ratelimit(logger, r):
 	except:
 		reset = "?"
 
-	logger.debug("Github rate limit: %s/%s, reset at %s" % (remaining, ratelimit, reset))
+	logger.debug("Github rate limit: %s/%s, reset at %s", remaining, ratelimit, reset)

@@ -175,14 +175,14 @@ class EventManager(object):
 					self._shutdown_signaled = True
 
 				eventListeners = self._registeredListeners[event]
-				self._logger_fire.debug("Firing event: {} (Payload: {!r})".format(event, payload))
+				self._logger_fire.debug("Firing event: %s (Payload: %r)", event, payload)
 
 				for listener in eventListeners:
-					self._logger.debug("Sending action to {!r}".format(listener))
+					self._logger.debug("Sending action to %r", listener)
 					try:
 						listener(event, payload)
 					except:
-						self._logger.exception("Got an exception while sending event {} (Payload: {!r}) to {}".format(event, payload, listener))
+						self._logger.exception("Got an exception while sending event %s (Payload: %r) to %s", event, payload, listener)
 
 				octoprint.plugin.call_plugin(octoprint.plugin.types.EventHandlerPlugin,
 				                             "on_event",
@@ -212,8 +212,8 @@ class EventManager(object):
 		self._enqueue(event, payload)
 
 		if send_held_back:
-			self._logger.info("Adding {} events to queue that "
-			                  "were held back before startup event".format(self._held_back.qsize()))
+			self._logger.info("Adding %s events to queue that "
+			                  "were held back before startup event", self._held_back.qsize())
 			while True:
 				try:
 					self._queue.put(self._held_back.get(block=False))
@@ -246,7 +246,7 @@ class EventManager(object):
 			return
 
 		self._registeredListeners[event].append(callback)
-		self._logger.debug("Subscribed listener {!r} for event {}".format(callback, event))
+		self._logger.debug("Subscribed listener %r for event %s", callback, event)
 
 	def unsubscribe (self, event, callback):
 		"""
@@ -307,7 +307,7 @@ class DebugEventListener(GenericEventListener):
 
 	def eventCallback(self, event, payload):
 		GenericEventListener.eventCallback(self, event, payload)
-		self._logger.debug("Received event: %s (Payload: %r)" % (event, payload))
+		self._logger.debug("Received event: %s (Payload: %r)", event, payload)
 
 
 class CommandTrigger(GenericEventListener):
@@ -333,16 +333,16 @@ class CommandTrigger(GenericEventListener):
 		subscriptions = settings().get(["events", "subscriptions"])
 		for subscription in subscriptions:
 			if not isinstance(subscription, dict):
-				self._logger.info("Invalid subscription definition, not a dictionary: {!r}".format(subscription))
+				self._logger.info("Invalid subscription definition, not a dictionary: %r", subscription)
 				continue
 
 			if not "event" in subscription.keys() or not "command" in subscription.keys() \
 					or not "type" in subscription.keys() or not subscription["type"] in ["system", "gcode"]:
-				self._logger.info("Invalid command trigger, missing either event, type or command or type is invalid: {!r}".format(subscription))
+				self._logger.info("Invalid command trigger, missing either event, type or command or type is invalid: %r", subscription)
 				continue
 
 			if "enabled" in subscription.keys() and not subscription["enabled"]:
-				self._logger.info("Disabled command trigger: {!r}".format(subscription))
+				self._logger.info("Disabled command trigger: %r", subscription)
 				continue
 
 			event = subscription["event"]
@@ -380,7 +380,7 @@ class CommandTrigger(GenericEventListener):
 					processedCommand = self._processCommand(command, payload)
 				self.executeCommand(processedCommand, commandType, debug=debug)
 			except KeyError as e:
-				self._logger.warning("There was an error processing one or more placeholders in the following command: %s" % command)
+				self._logger.warning("There was an error processing one or more placeholders in the following command: %s", command)
 
 	def executeCommand(self, command, commandType, debug=False):
 		if commandType == "system":
@@ -391,7 +391,7 @@ class CommandTrigger(GenericEventListener):
 	def _executeSystemCommand(self, command, debug=False):
 		def commandExecutioner(cmd):
 			if debug:
-				self._logger.info("Executing system command: {}".format(cmd))
+				self._logger.info("Executing system command: %s", cmd)
 			else:
 				self._logger.info("Executing a system command")
 			# we run this with shell=True since we have to trust whatever
@@ -408,9 +408,9 @@ class CommandTrigger(GenericEventListener):
 					commandExecutioner(command)
 			except subprocess.CalledProcessError as e:
 				if debug:
-					self._logger.warning("Command failed with return code {}: {}".format(e.returncode, str(e)))
+					self._logger.warning("Command failed with return code %s: %s", e.returncode, str(e))
 				else:
-					self._logger.warning("Command failed with return code {}, enable debug logging on target 'octoprint.events' for details".format(e.returncode))
+					self._logger.warning("Command failed with return code %s, enable debug logging on target 'octoprint.events' for details", e.returncode)
 			except:
 				self._logger.exception("Command failed")
 

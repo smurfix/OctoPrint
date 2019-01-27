@@ -154,7 +154,7 @@ def plugin_settings_for_settings_plugin(plugin_key, instance, settings=None):
 	try:
 		get_preprocessors, set_preprocessors = instance.get_settings_preprocessors()
 	except:
-		logging.getLogger(__name__).exception("Error while retrieving preprocessors for plugin {}".format(plugin_key))
+		logging.getLogger(__name__).exception("Error while retrieving preprocessors for plugin %s", plugin_key)
 		return None
 
 	return plugin_settings(plugin_key, get_preprocessors=get_preprocessors, set_preprocessors=set_preprocessors, settings=settings)
@@ -216,7 +216,7 @@ def call_plugin(types, method, args=None, kwargs=None, callback=None, error_call
 			continue
 
 		if hasattr(plugin, method):
-			logger.debug("Calling {} on {}".format(method, plugin._identifier))
+			logger.debug("Calling %s on %s", method, plugin._identifier)
 			try:
 				result = getattr(plugin, method)(*args, **kwargs)
 				if callback:

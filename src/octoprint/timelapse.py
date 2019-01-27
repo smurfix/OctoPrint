@@ -344,8 +344,8 @@ def configure_timelapse(config=None, persist=False):
 
 	type = config["type"]
 	if not timelapse_precondition and timelapse_precondition:
-		logging.getLogger(__name__).warn("Essential timelapse settings unconfigured (snapshot URL or FFMPEG path) "
-		                                 "but timelapse enabled.")
+		logging.getLogger(__name__).warning("Essential timelapse settings unconfigured (snapshot URL or FFMPEG path) "
+		                                    "but timelapse enabled.")
 
 	if not timelapse_enabled or not timelapse_precondition or type is None or "off" == type:
 		current = None
@@ -497,7 +497,7 @@ class Timelapse(object):
 		return None
 
 	def start_timelapse(self, gcodeFile):
-		self._logger.debug("Starting timelapse for %s" % gcodeFile)
+		self._logger.debug("Starting timelapse for %s", gcodeFile)
 
 		self._image_number = 0
 		self._capture_errors = 0
@@ -901,7 +901,7 @@ class TimelapseRenderJob(object):
 				if returncode == 0:
 					self._notify_callback("success", output)
 				else:
-					self._logger.warning("Could not render movie, got return code %r: %s" % (returncode, stderr_text))
+					self._logger.warning("Could not render movie, got return code %r: %s", returncode, stderr_text)
 					self._notify_callback("fail", output, returncode=returncode, stdout=stdout_text, stderr=stderr_text, reason="returncode")
 			except:
 				self._logger.exception("Could not render movie due to unknown error")

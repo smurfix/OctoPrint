@@ -174,10 +174,10 @@ class AbstractAnalysisQueue(object):
 		"""
 
 		if high_priority:
-			self._logger.debug("Adding entry {entry} to analysis queue with high priority".format(entry=entry))
+			self._logger.debug("Adding entry %s to analysis queue with high priority", entry)
 			prio = self.__class__.HIGH_PRIO
 		else:
-			self._logger.debug("Adding entry {entry} to analysis queue with low priority".format(entry=entry))
+			self._logger.debug("Adding entry %s to analysis queue with low priority", entry)
 			prio = self.__class__.LOW_PRIO
 
 		self._queue.put((prio, entry, high_priority))
@@ -221,7 +221,7 @@ class AbstractAnalysisQueue(object):
 	def _work(self):
 		while True:
 			(priority, entry, high_priority) = self._queue.get()
-			self._logger.debug("Processing entry {} from queue (priority {})".format(entry, priority))
+			self._logger.debug("Processing entry %s from queue (priority %s)", entry, priority)
 			self._active.wait()
 
 			try:
@@ -233,7 +233,7 @@ class AbstractAnalysisQueue(object):
 					self._queue.put((self.__class__.HIGH_PRIO_ABORTED if high_priority else self.__class__.LOW_PRIO_ABORTED,
 					                 entry,
 					                 high_priority))
-				self._logger.debug("Running analysis of entry {} aborted".format(entry))
+				self._logger.debug("Running analysis of entry %s aborted", entry)
 				self._queue.task_done()
 				self._done.set()
 			else:
@@ -250,7 +250,7 @@ class AbstractAnalysisQueue(object):
 
 		try:
 			start_time = time.time()
-			self._logger.info("Starting analysis of {}".format(entry))
+			self._logger.info("Starting analysis of %s", entry)
 			eventManager().fire(Events.METADATA_ANALYSIS_STARTED, {"name": entry.name,
 			                                                       "path": entry.path,
 			                                                       "origin": entry.location,
@@ -262,7 +262,7 @@ class AbstractAnalysisQueue(object):
 				result = self._do_analysis(high_priority=high_priority)
 			except TypeError:
 				result = self._do_analysis()
-			self._logger.info("Analysis of entry {} finished, needed {:.2f}s".format(entry, time.time() - start_time))
+			self._logger.info("Analysis of entry %s finished, needed %.2f", entry, time.time() - start_time)
 			self._finished_callback(self._current, result)
 		finally:
 			self._current = None
@@ -364,7 +364,7 @@ class GcodeAnalysisQueue(AbstractAnalysisQueue):
 				command += ["--g90-extruder"]
 			command.append(self._current.absolute_path)
 
-			self._logger.info("Invoking analysis command: {}".format(" ".join(command)))
+			self._logger.info("Invoking analysis command: %s", " ".join(command))
 
 			self._aborted = False
 			p = sarge.run(command, async_=True, stdout=sarge.Capture())
@@ -398,7 +398,7 @@ class GcodeAnalysisQueue(AbstractAnalysisQueue):
 				p.close()
 
 			output = p.stdout.text
-			self._logger.debug("Got output: {!r}".format(output))
+			self._logger.debug("Got output: %r", output)
 
 			if not "RESULTS:" in output:
 				raise RuntimeError("No analysis result found")

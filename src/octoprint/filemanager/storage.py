@@ -492,7 +492,7 @@ class LocalFileStorage(StorageInterface):
 		self._initialize_metadata()
 
 	def _initialize_metadata(self):
-		self._logger.info("Initializing the file metadata for {}...".format(self.basefolder))
+		self._logger.info("Initializing the file metadata for %s...", self.basefolder)
 
 		old_metadata_path = os.path.join(self.basefolder, "metadata.yaml")
 		backup_path = os.path.join(self.basefolder, "metadata.yaml.backup")
@@ -521,7 +521,7 @@ class LocalFileStorage(StorageInterface):
 			# make sure the metadata is initialized as far as possible
 			self._list_folder(self.basefolder)
 
-		self._logger.info("... file metadata for {} initialized successfully.".format(self.basefolder))
+		self._logger.info("... file metadata for %s initialized successfully.", self.basefolder)
 
 	@property
 	def analysis_backlog(self):
@@ -1022,10 +1022,10 @@ class LocalFileStorage(StorageInterface):
 			try:
 				shutil.move(entry_path, sanitized_path)
 
-				self._logger.info(u"Sanitized \"{}\" to \"{}\"".format(entry_path, sanitized_path))
+				self._logger.info(u"Sanitized %r to %r", entry_path, sanitized_path)
 				return sanitized, sanitized_path
 			except:
-				self._logger.exception(u"Error while trying to rename \"{}\" to \"{}\", ignoring file".format(entry_path, sanitized_path))
+				self._logger.exception(u"Error while trying to rename %r to %r, ignoring file", entry_path, sanitized_path)
 				raise
 
 		return entry, entry_path
@@ -1115,7 +1115,7 @@ class LocalFileStorage(StorageInterface):
 			try:
 				print_time = float(print_time)
 			except:
-				self._logger.warning("Invalid print time value found in print history for {} in {}/.metadata.json: {!r}".format(name, path, print_time))
+				self._logger.warning("Invalid print time value found in print history for %s in %s/.metadata.json: %r", name, path, print_time)
 				continue
 
 			if not printer_profile in former_print_times:
@@ -1410,7 +1410,7 @@ class LocalFileStorage(StorageInterface):
 						result[entry_name] = extended_entry_data
 			except:
 				# So something went wrong somewhere while processing this file entry - log that and continue
-				self._logger.exception("Error while processing entry {}".format(entry_path))
+				self._logger.exception("Error while processing entry %s", entry_path)
 				continue
 
 		# TODO recreate links if we have metadata less entries
@@ -1527,7 +1527,7 @@ class LocalFileStorage(StorageInterface):
 						import json
 						metadata = json.load(f)
 					except:
-						self._logger.exception("Error while reading .metadata.json from {path}".format(**locals()))
+						self._logger.exception("Error while reading .metadata.json from %s", path)
 					else:
 						if isinstance(metadata, dict):
 							self._metadata_cache[path] = deepcopy(metadata)
@@ -1542,7 +1542,7 @@ class LocalFileStorage(StorageInterface):
 				with atomic_write(metadata_path) as f:
 					json.dump(metadata, f, indent=4, separators=(",", ": "))
 			except:
-				self._logger.exception("Error while writing .metadata.json to {path}".format(**locals()))
+				self._logger.exception("Error while writing .metadata.json to %s", path)
 			else:
 				self._metadata_cache[path] = deepcopy(metadata)
 
@@ -1555,7 +1555,7 @@ class LocalFileStorage(StorageInterface):
 					try:
 						os.remove(metadata_path)
 					except:
-						self._logger.exception("Error while deleting {metadata_file} from {path}".format(**locals()))
+						self._logger.exception("Error while deleting %s from %s", metadata_file, path)
 			if path in self._metadata_cache:
 				del self._metadata_cache[path]
 
@@ -1581,7 +1581,7 @@ class LocalFileStorage(StorageInterface):
 				try:
 					metadata = yaml.safe_load(f)
 				except:
-					self._logger.exception("Error while reading .metadata.yaml from {path}".format(**locals()))
+					self._logger.exception("Error while reading .metadata.yaml from %s", path)
 					return
 
 			if not isinstance(metadata, dict):

@@ -1090,7 +1090,7 @@ class WizardPlugin(OctoPrintPlugin, ReloadNeedingPlugin):
 				current = int(wizard_version)
 			except ValueError as e:
 				import logging
-				logging.getLogger(__name__).log("WizardPlugin {} returned invalid value {} for wizard version: {}".format(name, wizard_version, str(e)))
+				logging.getLogger(__name__).log("WizardPlugin %s returned invalid value %s for wizard version: %s", name, wizard_version, e)
 
 		return (current == seen) \
 		       or (current is None and seen is not None) \
@@ -1136,9 +1136,10 @@ class SimpleApiPlugin(OctoPrintPlugin):
 	               parameter = "unset"
 	               if "parameter" in data:
 	                   parameter = "set"
-	               self._logger.info("command1 called, parameter is {parameter}".format(**locals()))
+	               self._logger.info("command1 called, parameter is %s", parameter)
 	           elif command == "command2":
-	               self._logger.info("command2 called, some_parameter is {some_parameter}".format(**data))
+			       some_parameter = data["some_parameter"]
+	               self._logger.info("command2 called, some_parameter is %s", some_parameter)
 
 	       def on_api_get(self, request):
 	           return flask.jsonify(foo="bar")
@@ -1437,13 +1438,13 @@ class SettingsPlugin(OctoPrintPlugin):
 
 	           new_flag = self._settings.get_boolean(["sub", "some_flag"])
 	           if old_flag != new_flag:
-	               self._logger.info("sub.some_flag changed from {old_flag} to {new_flag}".format(**locals()))
+	               self._logger.info("sub.some_flag changed from %s to %s", old_flag, new_flag)
 
 	       def on_after_startup(self):
 	           some_setting = self._settings.get(["some_setting"])
 	           some_value = self._settings.get_int(["some_value"])
 	           some_flag = self._settings.get_boolean(["sub", "some_flag"])
-	           self._logger.info("some_setting = {some_setting}, some_value = {some_value}, sub.some_flag = {some_flag}".format(**locals())
+	           self._logger.info("some_setting = %s, some_value = %s, sub.some_flag = %s", some_setting, some_value, some_flag)
 
 	   __plugin_implementation__ = MySettingsPlugin()
 

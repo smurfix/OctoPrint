@@ -24,7 +24,7 @@ def run_server(basedir, configfile, host, port, debug, allow_root, logging_confi
 		logger = logging.getLogger("octoprint.startup")
 
 		logger.info(get_divider_line("*"))
-		logger.info("Starting OctoPrint {}".format(__display_version__))
+		logger.info("Starting OctoPrint %s", __display_version__)
 		if safe_mode:
 			logger.info("Starting in SAFE MODE. Third party plugins will be disabled!")
 			if safe_mode == "flag":
@@ -35,7 +35,7 @@ def run_server(basedir, configfile, host, port, debug, allow_root, logging_confi
 				reason = "problem during last startup"
 			else:
 				reason = "unknown"
-			logger.info("Reason for safe mode: {}".format(reason))
+			logger.info("Reason for safe mode: %s", reason)
 
 		if recorder and len(recorder):
 			logger.info(get_divider_line("-", "Logged during platform initialization:"))

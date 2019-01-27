@@ -245,7 +245,7 @@ class VirtualPrinter(object):
 
 	@timeout.setter
 	def timeout(self, value):
-		self._logger.debug("Setting read timeout to {}s".format(value))
+		self._logger.debug("Setting read timeout to %ss", value)
 		self._read_timeout = value
 
 	@property
@@ -254,7 +254,7 @@ class VirtualPrinter(object):
 
 	@write_timeout.setter
 	def write_timeout(self, value):
-		self._logger.debug("Setting write timeout to {}s".format(value))
+		self._logger.debug("Setting write timeout to %ss", value)
 		self._write_timeout = value
 
 	def _clearQueue(self, q):
@@ -1299,13 +1299,13 @@ class VirtualPrinter(object):
 				return 0
 
 			if "M112" in data and self._supportM112:
-				self._seriallog.info("<<< {}".format(data.strip()))
+				self._seriallog.info("<<< %s", data.strip())
 				self._kill()
 				return len(data)
 
 			try:
 				written = self.incoming.put(data, timeout=self._write_timeout, partial=True)
-				self._seriallog.info("<<< {}".format(data.strip()))
+				self._seriallog.info("<<< %s", data.strip())
 				return written
 			except queue.Full:
 				self._logger.info("Incoming queue is full, raising SerialTimeoutException")
@@ -1341,7 +1341,7 @@ class VirtualPrinter(object):
 		try:
 			# fetch a line from the queue, wait no longer than timeout
 			line = self.outgoing.get(timeout=timeout)
-			self._seriallog.info(">>> {}".format(line.strip()))
+			self._seriallog.info(">>> %s", line.strip())
 			self.outgoing.task_done()
 			return line
 		except queue.Empty:

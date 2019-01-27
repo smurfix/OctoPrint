@@ -1295,7 +1295,7 @@ class AppSessionManager(object):
 				elif self._oldest is None or valid_until < self._oldest:
 					self._oldest = valid_until
 
-			self._logger.debug("App sessions after cleanup: %r" % self._sessions)
+			self._logger.debug("App sessions after cleanup: %r", self._sessions)
 
 
 def get_remote_address(request):

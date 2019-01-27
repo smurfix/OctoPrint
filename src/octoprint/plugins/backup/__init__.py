@@ -137,8 +137,8 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 		exclude = data.get("exclude", [])
 
 		def on_backup_start(name, temporary_path, exclude):
-			self._logger.info(u"Creating backup zip at {} (excluded: {})...".format(temporary_path,
-			                                                                        u",".join(exclude) if len(exclude) else "-"))
+			self._logger.info(u"Creating backup zip at %s (excluded: %s)...", temporary_path,
+			                                                                        u",".join(exclude) if len(exclude) else "-")
 
 			with self._in_progress_lock:
 				self._in_progress.append(name)
@@ -192,7 +192,7 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 			try:
 				os.remove(full_path)
 			except:
-				self._logger.exception(u"Could not delete {}".format(filename))
+				self._logger.exception(u"Could not delete %s", filename)
 				raise
 		return NO_CONTENT
 
@@ -236,20 +236,20 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 				compatible = octoprint_compatible and os_compatible
 				if not compatible:
 					if not octoprint_compatible and not os_compatible:
-						self._logger.warn(u"Cannot install plugin {}, it is incompatible to this version "
-						                  u"of OctoPrint and the underlying operating system".format(plugin["id"]))
+						self._logger.warning(u"Cannot install plugin %s, it is incompatible to this version "
+						                     u"of OctoPrint and the underlying operating system", plugin["id"])
 					elif not octoprint_compatible:
-						self._logger.warn(u"Cannot install plugin {}, it is incompatible to this version "
-						                  u"of OctoPrint".format(plugin["id"]))
+						self._logger.warning(u"Cannot install plugin %s, it is incompatible to this version "
+						                     u"of OctoPrint", plugin["id"])
 					elif not os_compatible:
-						self._logger.warn(u"Cannot install plugin {}, it is incompatible to the underlying "
-						                  u"operating system".format(plugin["id"]))
+						self._logger.warning(u"Cannot install plugin %s, it is incompatible to the underlying "
+						                     u"operating system", plugin["id"])
 					self._send_client_message("plugin_incompatible", dict(plugin=plugin["id"],
 					                                                      octoprint_compatible=octoprint_compatible,
 					                                                      os_compatible=os_compatible))
 					continue
 
-				self._logger.info(u"Installing plugin {}".format(plugin["id"]))
+				self._logger.info(u"Installing plugin %s", plugin["id"])
 				self._send_client_message("installing_plugin", dict(plugin=plugin["id"]))
 				self.__class__._install_plugin(plugin,
 				                               force_user=force_user,
@@ -498,15 +498,15 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 					try:
 						os.remove(data_file)
 					except:
-						self._logger.exception(u"Error while deleting list of unknown plugins at {}".format(data_file))
+						self._logger.exception(u"Error while deleting list of unknown plugins at %s", data_file)
 
 				return unknown_plugins
 			except:
-				self._logger.exception(u"Error while reading list of unknown plugins from {}".format(data_file))
+				self._logger.exception(u"Error while reading list of unknown plugins from %s", data_file)
 				try:
 					os.remove(data_file)
 				except:
-					self._logger.exception(u"Error while deleting list of unknown plugins at {}".format(data_file))
+					self._logger.exception(u"Error while deleting list of unknown plugins at %s", data_file)
 
 		return []
 
@@ -557,7 +557,7 @@ class BackupPlugin(octoprint.plugin.SettingsPlugin,
 			r = requests.get(url, timeout=30)
 			r.raise_for_status()
 		except:
-			logger.exception(u"Error while fetching the plugin repository data from {}".format(url))
+			logger.exception(u"Error while fetching the plugin repository data from %s", url)
 			return dict()
 
 		from octoprint.plugins.pluginmanager import map_repository_entry

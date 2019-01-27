@@ -430,7 +430,7 @@ class gcode(object):
 
 			elif T is not None:
 				if T > max_extruders:
-					self._logger.warning("GCODE tried to select tool %d, that looks wrong, ignoring for GCODE analysis" % T)
+					self._logger.warning("GCODE tried to select tool %d, that looks wrong, ignoring for GCODE analysis", T)
 				elif T == currentExtruder:
 					pass
 				else:

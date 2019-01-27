@@ -88,7 +88,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 				if isinstance(assets, (tuple, list)):
 					additional_assets += assets
 			except:
-				self._logger.exception("Error fetching theming CSS to include from plugin {}".format(name))
+				self._logger.exception("Error fetching theming CSS to include from plugin %s", name)
 
 		render_kwargs.update(dict(forcelogin_theming=additional_assets))
 		return make_response(render_template("forcelogin_index.jinja2", **render_kwargs))
@@ -167,7 +167,7 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 		if len(backlog):
 			for message, payload in backlog:
 				socket._do_emit(message, payload)
-			self._logger.debug("Sent backlog of {} message(s) via socket".format(len(backlog)))
+			self._logger.debug("Sent backlog of %s message(s) via socket", len(backlog))
 
 	def socket_emit_validator(self, socket, user, message, payload):
 		if self._user_manager.enabled and not self._user_manager.has_been_customized():
@@ -186,9 +186,9 @@ class ForceLoginPlugin(octoprint.plugin.UiPlugin,
 		with self._message_backlog_mutex:
 			if len(self._message_backlog[socket]) < self.MAX_BACKLOG_LEN:
 				self._message_backlog[socket].append((message, payload))
-				self._logger.debug("Socket message held back until authed, added to backlog: {}".format(message))
+				self._logger.debug("Socket message held back until authed, added to backlog: %s", message)
 			else:
-				self._logger.warn("Socket message held back, but backlog full. Throwing message away: {}".format(message))
+				self._logger.warning("Socket message held back, but backlog full. Throwing message away: %s", message)
 
 		return False
 
