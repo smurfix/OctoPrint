@@ -5,7 +5,7 @@ __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
 __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 
 import octoprint.plugin
 import octoprint.plugin.core
@@ -248,7 +248,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 			try:
 				os.remove(archive.name)
 			except Exception as e:
-				self._logger.warning("Could not remove temporary file {path} again: {message}".format(path=archive.name, message=str(e)))
+				self._logger.warning("Could not remove temporary file {path} again: {message}".format(path=archive.name, message=unicode(e)))
 
 	##~~ EventHandlerPlugin
 
@@ -311,9 +311,9 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 				hash.update(value)
 
 			hash_update(repr(self._get_plugins()))
-			hash_update(str(self._repository_available))
+			hash_update(unicode(self._repository_available))
 			hash_update(repr(self._repository_plugins))
-			hash_update(str(self._notices_available))
+			hash_update(unicode(self._notices_available))
 			hash_update(repr(self._notices))
 			hash_update(repr(safe_mode))
 			hash_update(repr(self._connectivity_checker.online))
@@ -814,7 +814,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 			r.raise_for_status()
 			self._logger.info("Loaded plugin repository data from {}".format(repository_url))
 		except Exception as e:
-			self._logger.exception("Could not fetch plugins from repository at {repository_url}: {message}".format(repository_url=repository_url, message=str(e)))
+			self._logger.exception("Could not fetch plugins from repository at {repository_url}: {message}".format(repository_url=repository_url, message=unicode(e)))
 			return None
 
 		repo_data = r.json()
@@ -824,7 +824,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 			with octoprint.util.atomic_write(self._repository_cache_path, mode='wt') as f:
 				json.dump(repo_data, f)
 		except Exception as e:
-			self._logger.exception("Error while saving repository data to {}: {}".format(self._repository_cache_path, str(e)))
+			self._logger.exception("Error while saving repository data to {}: {}".format(self._repository_cache_path, unicode(e)))
 
 		return repo_data
 
@@ -864,7 +864,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 			r.raise_for_status()
 			self._logger.info("Loaded plugin notices data from {}".format(notices_url))
 		except Exception as e:
-			self._logger.exception("Could not fetch notices from {notices_url}: {message}".format(notices_url=notices_url, message=str(e)))
+			self._logger.exception("Could not fetch notices from {notices_url}: {message}".format(notices_url=notices_url, message=unicode(e)))
 			return None
 
 		notice_data = r.json()
@@ -874,7 +874,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 			with octoprint.util.atomic_write(self._notices_cache_path, mode="wt") as f:
 				json.dump(notice_data, f)
 		except Exception as e:
-			self._logger.exception("Error while saving notices to {}: {}".format(self._notices_cache_path, str(e)))
+			self._logger.exception("Error while saving notices to {}: {}".format(self._notices_cache_path, unicode(e)))
 		return notice_data
 
 	def _refresh_notices(self, notice_data=None):
@@ -895,7 +895,7 @@ class PluginManagerPlugin(octoprint.plugin.SimpleApiPlugin,
 				notice["timestamp"] = parsed_date.timetuple()
 			except Exception as e:
 				self._logger.warning("Error while parsing date {!r} for plugin notice "
-				                  "of plugin {}, ignoring notice: {}".format(notice["date"], key,  str(e)))
+				                  "of plugin {}, ignoring notice: {}".format(notice["date"], key,  unicode(e)))
 				continue
 
 			if not key in notices:

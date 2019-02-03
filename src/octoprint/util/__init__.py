@@ -276,7 +276,7 @@ def get_exception_string():
 	"""
 
 	locationInfo = traceback.extract_tb(sys.exc_info()[2])[0]
-	return "%s: '%s' @ %s:%s:%d" % (str(sys.exc_info()[0].__name__), str(sys.exc_info()[1]), os.path.basename(locationInfo[0]), locationInfo[2], locationInfo[1])
+	return "%s: '%s' @ %s:%s:%d" % (unicode(sys.exc_info()[0].__name__), unicode(sys.exc_info()[1]), os.path.basename(locationInfo[0]), locationInfo[2], locationInfo[1])
 
 
 @deprecated("get_free_bytes has been deprecated and will be removed in the future",

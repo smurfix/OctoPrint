@@ -20,6 +20,7 @@ import subprocess
 import sys
 import logging
 
+from past.builtins import unicode
 
 def get_keywords():
     """Get the keywords needed to look up the version information."""
@@ -79,7 +80,7 @@ def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False):
     p = None
     for c in commands:
         try:
-            dispcmd = str([c] + args)
+            dispcmd = unicode([c] + args)
             # remember shell=False, so use git.cmd on windows, not just git
             p = subprocess.Popen([c] + args, cwd=cwd, stdout=subprocess.PIPE,
                                  stderr=(subprocess.PIPE if hide_stderr

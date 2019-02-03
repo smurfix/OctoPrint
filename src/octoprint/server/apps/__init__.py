@@ -9,6 +9,8 @@ import rsa
 from flask import Blueprint, request, make_response, jsonify
 import logging
 
+from past.builtins import unicode
+
 import octoprint.server
 import octoprint.plugin
 
@@ -46,12 +48,12 @@ def verifySessionKey():
 		if not key in data:
 			return make_response("Missing argument: {key}".format(key=key), 400)
 
-	appid = str(data["appid"])
+	appid = unicode(data["appid"])
 	if not "appversion" in data:
 		appversion = "any"
 	else:
-		appversion = str(data["appversion"])
-	key = str(data["key"])
+		appversion = unicode(data["appversion"])
+	key = unicode(data["key"])
 
 	# calculate message that was signed
 	message = "{appid}:{appversion}:{key}".format(**locals())

@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import io
 import sys
 import logging as log
+from past.builtins import unicode
 
 #~~ version
 
@@ -59,7 +60,7 @@ class FatalStartupError(Exception):
 	def __str__(self):
 		result = Exception.__str__(self)
 		if self.cause:
-			return "{}: {}".format(result, str(self.cause))
+			return "{}: {}".format(result, unicode(self.cause))
 		else:
 			return result
 

@@ -9,6 +9,8 @@ import logging
 import sarge
 import threading
 
+from past.builtins import unicode
+
 from flask import request, make_response, jsonify, url_for
 from flask_babel import gettext
 
@@ -105,7 +107,7 @@ def executeSystemCommand(source, command):
 			command_spec["before"]()
 	except Exception as e:
 		if not do_ignore:
-			error = "Command \"before\" for {}:{} failed: {}".format(source, command, str(e))
+			error = "Command \"before\" for {}:{} failed: {}".format(source, command, unicode(e))
 			logger.warning(error)
 			return make_response(error, 500)
 
@@ -145,7 +147,7 @@ def executeSystemCommand(source, command):
 
 	except Exception as e:
 		if not do_ignore:
-			error = "Command for {}:{} failed: {}".format(source, command, str(e))
+			error = "Command for {}:{} failed: {}".format(source, command, unicode(e))
 			logger.warning(error)
 			return make_response(error, 500)
 

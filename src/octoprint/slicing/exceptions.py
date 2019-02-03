@@ -115,6 +115,6 @@ class CouldNotDeleteProfile(ProfileException):
 
 		self.cause = cause
 		if cause:
-			self.message = "Could not delete profile {profile} for slicer {slicer}: {cause}".format(profile=profile, slicer=slicer, cause=str(cause))
+			self.message = "Could not delete profile {profile} for slicer {slicer}: {cause}".format(profile=profile, slicer=slicer, cause=unicode(cause))
 		else:
 			self.message = "Could not delete profile {profile} for slicer {slicer}".format(profile=profile, slicer=slicer)

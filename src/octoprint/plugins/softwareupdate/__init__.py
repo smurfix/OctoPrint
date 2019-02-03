@@ -34,6 +34,7 @@ from octoprint.util.version import get_comparable_version
 from octoprint.util.pip import LocalPipCaller
 import octoprint.settings
 
+from past.builtins import unicode
 
 MINIMUM_PYTHON = "2.7.9"
 MINIMUM_SETUPTOOLS = "5.5.1"
@@ -560,18 +561,18 @@ class SoftwareUpdatePlugin(octoprint.plugin.BlueprintPlugin,
 				if target in self._version_cache and not force:
 					data = self._version_cache[target]
 					hash_update(current_hash)
-					hash_update(str(data["timestamp"] + self._version_cache_ttl >= time.time() > data["timestamp"]))
+					hash_update(unicode(data["timestamp"] + self._version_cache_ttl >= time.time() > data["timestamp"]))
 					hash_update(repr(data["information"]))
-					hash_update(str(data["available"]))
-					hash_update(str(data["possible"]))
-					hash_update(str(data.get("online", None)))
+					hash_update(unicode(data["available"]))
+					hash_update(unicode(data["possible"]))
+					hash_update(unicode(data.get("online", None)))
 
 			hash_update(",".join(targets))
 
-			hash_update(str(self._environment_supported))
-			hash_update(str(self._version_cache_timestamp))
-			hash_update(str(self._connectivity_checker.online))
-			hash_update(str(self._update_in_progress))
+			hash_update(unicode(self._environment_supported))
+			hash_update(unicode(self._version_cache_timestamp))
+			hash_update(unicode(self._connectivity_checker.online))
+			hash_update(unicode(self._update_in_progress))
 			hash_update(self.DATA_FORMAT_VERSION)
 			return hash.hexdigest()
 

@@ -11,7 +11,7 @@ import copy
 from flask import jsonify, make_response, request, url_for
 from werkzeug.exceptions import BadRequest
 
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 
 from octoprint.server.api import api, NO_CONTENT, valid_boolean_trues
 from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking
@@ -100,7 +100,7 @@ def printerProfilesAdd():
 	except CouldNotOverwriteError:
 		return make_response("Profile {} already exists and overwriting was not allowed".format(profile["id"]), 400)
 	except Exception as e:
-		return make_response("Could not save profile: %s" % str(e), 500)
+		return make_response("Could not save profile: %s" % unicode(e), 500)
 	else:
 		return jsonify(dict(profile=_convert_profile(saved_profile)))
 
@@ -168,7 +168,7 @@ def printerProfilesUpdate(identifier):
 	except CouldNotOverwriteError:
 		return make_response("Profile already exists and overwriting was not allowed", 400)
 	except Exception as e:
-		return make_response("Could not save profile: %s" % str(e), 500)
+		return make_response("Could not save profile: %s" % unicode(e), 500)
 	else:
 		return jsonify(dict(profile=_convert_profile(saved_profile)))
 

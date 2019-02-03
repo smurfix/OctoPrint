@@ -9,7 +9,7 @@ import os
 import datetime
 import codecs
 
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 
 from collections import defaultdict
 from flask import request, g, url_for, make_response, render_template, send_from_directory, redirect, abort
@@ -301,7 +301,7 @@ def index():
 			if lastmodified:
 				hash_update(lastmodified)
 			for add in additional:
-				hash_update(str(add))
+				hash_update(unicode(add))
 			return hash.hexdigest()
 
 		decorated_view = view

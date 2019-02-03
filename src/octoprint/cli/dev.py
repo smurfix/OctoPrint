@@ -9,7 +9,7 @@ __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms
 import click
 click.disable_unicode_literals_warning = True
 
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 
 class OctoPrintDevelCommands(click.MultiCommand):
 	"""
@@ -118,7 +118,7 @@ class OctoPrintDevelCommands(click.MultiCommand):
 						val = options[key]
 					else:
 						if not isinstance(raw, basestring):
-							raw = str(raw)
+							raw = unicode(raw)
 						val = env.from_string(raw).render(cookiecutter=cookiecutter_dict)
 
 						if not no_input:

@@ -670,7 +670,7 @@ class Timelapse(object):
 			if callable(onerror):
 				onerror()
 			eventManager().fire(Events.CAPTURE_FAILED, dict(file=filename,
-			                                                error=str(e),
+			                                                error=unicode(e),
 			                                                url=self._snapshot_url))
 			return False
 

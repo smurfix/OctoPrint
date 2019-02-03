@@ -5,6 +5,8 @@ import os, struct, sys, time
 
 from serial import Serial
 
+from past.builtins import unicode
+
 from . import chipDB
 
 class IspBase():
@@ -12,7 +14,7 @@ class IspBase():
 		self.curExtAddr = -1
 		self.chip = chipDB.getChipFromDB(self.getSignature())
 		if self.chip == False:
-			raise IspError("Chip with signature: " + str(self.getSignature()) + "not found")
+			raise IspError("Chip with signature: " + unicode(self.getSignature()) + "not found")
 		self.chipErase()
 		
 		print("Flashing %i bytes" % len(flashData))

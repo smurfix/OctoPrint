@@ -9,6 +9,8 @@ Originally from http://www.jejik.com/articles/2007/02/a_simple_unix_linux_daemon
 
 import io, sys, os, time, signal
 
+from past.builtins import unicode
+
 class Daemon:
 	"""
 	A generic daemon class.
@@ -39,7 +41,7 @@ class Daemon:
 				# exit first parent
 				sys.exit(0)
 		except OSError as err:
-			self.error("First fork failed: {}".format(str(err)))
+			self.error("First fork failed: {}".format(unicode(err)))
 			sys.exit(1)
 
 		# decouple from parent environment
@@ -54,7 +56,7 @@ class Daemon:
 				# exit from second parent
 				sys.exit(0)
 		except OSError as err:
-			self.error("Second fork failed: {}".format(str(err)))
+			self.error("Second fork failed: {}".format(unicode(err)))
 			sys.exit(1)
 
 	def _redirect_io(self):
@@ -104,7 +106,7 @@ class Daemon:
 				os.kill(pid, signal.SIGTERM)
 				time.sleep(0.1)
 		except OSError as err:
-			e = str(err.args)
+			e = unicode(err.args)
 			if e.find("No such process") > 0:
 				self.remove_pidfile()
 			else:
@@ -152,7 +154,7 @@ class Daemon:
 	def set_pid(self, pid):
 		"""Write the pid to the pidfile."""
 		with io.open(self.pidfile,'wt+', encoding='utf-8') as f:
-			f.write(str(pid) + '\n')
+			f.write(unicode(pid) + '\n')
 
 	def remove_pidfile(self):
 		"""Removes the pidfile."""

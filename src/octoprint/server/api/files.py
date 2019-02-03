@@ -26,6 +26,7 @@ import hashlib
 import logging
 import threading
 
+from past.builtins import unicode
 
 #~~ GCODE file handling
 
@@ -79,9 +80,9 @@ def _create_etag(path, filter, recursive, lm=None):
 	def hash_update(value):
 		value = value.encode('utf-8')
 		hash.update(value)
-	hash_update(str(lm))
-	hash_update(str(filter))
-	hash_update(str(recursive))
+	hash_update(unicode(lm))
+	hash_update(unicode(filter))
+	hash_update(unicode(recursive))
 
 	if path.endswith("/files") or path.endswith("/files/sdcard"):
 		# include sd data in etag

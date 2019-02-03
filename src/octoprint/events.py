@@ -19,6 +19,8 @@ import re
 from octoprint.settings import settings
 import octoprint.plugin
 
+from past.builtins import unicode
+
 # singleton
 _instance = None
 
@@ -406,7 +408,7 @@ class CommandTrigger(GenericEventListener):
 					commandExecutioner(command)
 			except subprocess.CalledProcessError as e:
 				if debug:
-					self._logger.warning("Command failed with return code {}: {}".format(e.returncode, str(e)))
+					self._logger.warning("Command failed with return code {}: {}".format(e.returncode, unicode(e)))
 				else:
 					self._logger.warning("Command failed with return code {}, enable debug logging on target 'octoprint.events' for details".format(e.returncode))
 			except Exception:
@@ -456,7 +458,7 @@ class CommandTrigger(GenericEventListener):
 			"__filename": "NO FILE",
 			"__filepath": "NO PATH",
 			"__progress": "0",
-			"__data": str(payload),
+			"__data": unicode(payload),
 			"__json": json_string,
 			"__now": datetime.datetime.now().isoformat()
 		}
@@ -464,7 +466,7 @@ class CommandTrigger(GenericEventListener):
 		currentData = self._printer.get_current_data()
 
 		if "currentZ" in currentData and currentData["currentZ"] is not None:
-			params["__currentZ"] = str(currentData["currentZ"])
+			params["__currentZ"] = unicode(currentData["currentZ"])
 
 		if "job" in currentData and "file" in currentData["job"] and "name" in currentData["job"]["file"] \
 				and currentData["job"]["file"]["name"] is not None:
@@ -473,7 +475,7 @@ class CommandTrigger(GenericEventListener):
 			params["__fileorigin"] = currentData["job"]["file"]["origin"]
 			if "progress" in currentData and currentData["progress"] is not None \
 				and "completion" in currentData["progress"] and currentData["progress"]["completion"] is not None:
-				params["__progress"] = str(round(currentData["progress"]["completion"]))
+				params["__progress"] = unicode(round(currentData["progress"]["completion"]))
 
 		# now add the payload keys as well
 		if isinstance(payload, dict):

@@ -15,6 +15,7 @@ from flask_babel import gettext
 
 # noinspection PyCompatibility
 from builtins import range
+from past.builtins import unicode
 
 import octoprint.plugin
 import octoprint.util
@@ -686,7 +687,7 @@ class DiscoveryPlugin(octoprint.plugin.StartupPlugin,
 		upnpUuid = self._settings.get(["upnpUuid"])
 		if upnpUuid is None:
 			import uuid
-			upnpUuid = str(uuid.uuid4())
+			upnpUuid = unicode(uuid.uuid4())
 			self._settings.set(["upnpUuid"], upnpUuid)
 			self._settings.save()
 		return upnpUuid

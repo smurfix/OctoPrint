@@ -870,7 +870,7 @@ class PluginManager(object):
 		if plugin.check():
 			return plugin
 		else:
-			self.logger.info("Plugin {plugin} did not pass check, not loading.".format(plugin=str(plugin)))
+			self.logger.info("Plugin {plugin} did not pass check, not loading.".format(plugin=unicode(plugin)))
 			return None
 
 	def _is_plugin_disabled(self, key):
@@ -891,7 +891,7 @@ class PluginManager(object):
 
 	def reload_plugins(self, startup=False, initialize_implementations=True, force_reload=None):
 		self.logger.info("Loading plugins from {folders} and installed plugin packages...".format(
-			folders=", ".join(map(lambda x: x[0] if isinstance(x, tuple) else str(x), self.plugin_folders))
+			folders=", ".join(map(lambda x: x[0] if isinstance(x, tuple) else unicode(x), self.plugin_folders))
 		))
 
 		if force_reload is None:
@@ -923,7 +923,7 @@ class PluginManager(object):
 			except PluginNeedsRestart:
 				pass
 			except PluginLifecycleException as e:
-				self.logger.info(str(e))
+				self.logger.info(unicode(e))
 
 		self.on_plugins_loaded(startup=startup,
 							   initialize_implementations=initialize_implementations,
@@ -940,7 +940,7 @@ class PluginManager(object):
 			except PluginNeedsRestart:
 				pass
 			except PluginLifecycleException as e:
-				self.logger.info(str(e))
+				self.logger.info(unicode(e))
 
 		self.on_plugins_enabled(startup=startup,
 								initialize_implementations=initialize_implementations,
@@ -1114,7 +1114,7 @@ class PluginManager(object):
 			try:
 				callback, order = self._get_callback_and_order(definition)
 			except ValueError as e:
-				self.logger.warning("There is something wrong with the hook definition {} for plugin {}: {}".format(definition, name, str(e)))
+				self.logger.warning("There is something wrong with the hook definition {} for plugin {}: {}".format(definition, name, unicode(e)))
 				continue
 
 			self._plugin_hooks[hook].append((order, name, callback))
@@ -1133,7 +1133,7 @@ class PluginManager(object):
 			try:
 				callback, order = self._get_callback_and_order(definition)
 			except ValueError as e:
-				self.logger.warning("There is something wrong with the hook definition {} for plugin {}: {}".format(definition, name, str(e)))
+				self.logger.warning("There is something wrong with the hook definition {} for plugin {}: {}".format(definition, name, unicode(e)))
 				continue
 
 			try:

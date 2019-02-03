@@ -8,6 +8,8 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 from flask import request, jsonify, make_response, url_for
 from werkzeug.exceptions import BadRequest
 
+from past.builtins import unicode
+
 from octoprint.server import slicingManager
 from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking
 from octoprint.server.api import api, NO_CONTENT
@@ -222,7 +224,7 @@ def slicingDelSlicerProfile(slicer, name):
 	except UnknownSlicer:
 		return make_response("Unknown slicer {slicer}".format(**locals()), 404)
 	except CouldNotDeleteProfile as e:
-		return make_response("Could not delete profile {profile} for slicer {slicer}: {cause}".format(profile=name, slicer=slicer, cause=str(e.cause)), 500)
+		return make_response("Could not delete profile {profile} for slicer {slicer}: {cause}".format(profile=name, slicer=slicer, cause=unicode(e.cause)), 500)
 
 	return NO_CONTENT
 

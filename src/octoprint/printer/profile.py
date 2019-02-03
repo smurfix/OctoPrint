@@ -155,6 +155,8 @@ try:
 except ImportError:
 	from scandir import scandir
 
+from past.builtins import unicode
+
 from octoprint.settings import settings
 from octoprint.util import dict_merge, dict_sanitize, dict_contains_keys, is_hidden_path
 
@@ -465,7 +467,7 @@ class PrinterProfileManager(object):
 				yaml.safe_dump(profile, f, default_flow_style=False, indent=2, allow_unicode=True)
 		except Exception as e:
 			self._logger.exception("Error while trying to save profile %s" % profile["id"])
-			raise SaveError("Cannot save profile %s: %s" % (profile["id"], str(e)))
+			raise SaveError("Cannot save profile %s: %s" % (profile["id"], unicode(e)))
 
 	def _remove_from_path(self, path):
 		try:
@@ -536,7 +538,7 @@ class PrinterProfileManager(object):
 			try:
 				convert_value(profile, path, int)
 			except Exception as e:
-				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=str(e)))
+				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=unicode(e)))
 				return False
 
 		# convert floats
@@ -544,7 +546,7 @@ class PrinterProfileManager(object):
 			try:
 				convert_value(profile, path, float)
 			except Exception as e:
-				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=str(e)))
+				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=unicode(e)))
 				return False
 
 		# convert booleans
@@ -552,7 +554,7 @@ class PrinterProfileManager(object):
 			try:
 				convert_value(profile, path, bool)
 			except Exception as e:
-				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=str(e)))
+				self._logger.warning("Profile has invalid value for path {path!r}: {msg}".format(path=".".join(path), msg=unicode(e)))
 				return False
 
 		# validate form factor

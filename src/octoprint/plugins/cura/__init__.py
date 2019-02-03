@@ -24,6 +24,8 @@ from .profile import Profile
 from .profile import GcodeFlavors
 from .profile import parse_gcode_flavor
 
+from past.builtins import unicode
+
 class CuraPlugin(octoprint.plugin.SlicerPlugin,
                  octoprint.plugin.SettingsPlugin,
                  octoprint.plugin.TemplatePlugin,
@@ -103,7 +105,7 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 				profile_dict = Profile.from_cura_ini(flask.request.values[input_upload_path])
 			except Exception as e:
 				self._logger.exception("Error while converting the imported profile")
-				return flask.make_response("Something went wrong while converting imported profile: {message}".format(message=str(e)), 500)
+				return flask.make_response("Something went wrong while converting imported profile: {message}".format(message=unicode(e)), 500)
 
 		else:
 			self._logger.warning("No profile file included for importing, aborting")
@@ -305,7 +307,7 @@ class CuraPlugin(octoprint.plugin.SlicerPlugin,
 
 				# Add the settings (sorted alphabetically) to the command
 				for k, v in sorted(engine_settings.items(), key=lambda s: s[0]):
-					args += ["-s", "%s=%s" % (k, str(v))]
+					args += ["-s", "%s=%s" % (k, unicode(v))]
 				args += ["-o", machinecode_path, model_path]
 
 				self._logger.info("Running {!r} in {}".format(" ".join(map(lambda x: to_unicode(x, errors="replace"),

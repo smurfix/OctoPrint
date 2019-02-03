@@ -18,6 +18,8 @@ from octoprint.printer import UnknownScript
 
 from octoprint.access.permissions import Permissions
 
+from past.builtins import unicode
+
 #~~ Printer
 
 
@@ -145,7 +147,7 @@ def printerToolCommand():
 		try:
 			printer.flow_rate(factor, tags=tags)
 		except ValueError as e:
-			return make_response("Invalid value for flow rate: %s" % str(e), 400)
+			return make_response("Invalid value for flow rate: %s" % unicode(e), 400)
 
 	return NO_CONTENT
 
@@ -286,7 +288,7 @@ def printerPrintheadCommand():
 		try:
 			printer.feed_rate(factor, tags=tags)
 		except ValueError as e:
-			return make_response("Invalid value for feed rate: %s" % str(e), 400)
+			return make_response("Invalid value for feed rate: %s" % unicode(e), 400)
 
 	return NO_CONTENT
 

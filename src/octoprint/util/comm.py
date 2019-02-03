@@ -18,10 +18,10 @@ try:
 	import queue
 except ImportError:
 	import Queue as queue
-from past.builtins import basestring
+
+from past.builtins import basestring, unicode
 
 import logging
-
 import serial
 
 import wrapt
@@ -3312,7 +3312,7 @@ class MachineCom(object):
 			return
 
 		if log:
-			self._log("Send: " + str(cmd))
+			self._log("Send: " + unicode(cmd))
 
 		cmd += "\n"
 		written = 0
@@ -4226,7 +4226,7 @@ def convert_pause_triggers(configured_triggers):
 				triggers[t].append(regex)
 		except Exception as exc:
 			# invalid regex or something like this
-			logging.getLogger(__name__).debug("Problem with trigger %r: %s", trigger, str(exc))
+			logging.getLogger(__name__).debug("Problem with trigger %r: %s", trigger, unicode(exc))
 
 	result = dict()
 	for t in triggers.keys():
@@ -4250,7 +4250,7 @@ def convert_feedback_controls(configured_controls):
 					result[key]["matcher"] = re.compile(control["regex"])
 					result[key]["pattern"] = control["regex"]
 				except Exception as exc:
-					logging.getLogger(__name__).warn("Invalid regex {regex} for custom control: {exc}".format(regex=control["regex"], exc=str(exc)))
+					logging.getLogger(__name__).warn("Invalid regex {regex} for custom control: {exc}".format(regex=control["regex"], exc=unicode(exc)))
 
 			result[key]["templates"][control["template_key"]] = control["template"]
 

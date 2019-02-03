@@ -25,6 +25,8 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 
 from .core import (Plugin, RestartNeedingPlugin, SortablePlugin)
 
+from past.builtins import unicode
+
 class OctoPrintPlugin(Plugin):
 	"""
 	The parent class of all OctoPrint plugin mixins.
@@ -1090,7 +1092,7 @@ class WizardPlugin(OctoPrintPlugin, ReloadNeedingPlugin):
 				current = int(wizard_version)
 			except ValueError as e:
 				import logging
-				logging.getLogger(__name__).log("WizardPlugin {} returned invalid value {} for wizard version: {}".format(name, wizard_version, str(e)))
+				logging.getLogger(__name__).log("WizardPlugin {} returned invalid value {} for wizard version: {}".format(name, wizard_version, unicode(e)))
 
 		return (current == seen) \
 		       or (current is None and seen is not None) \

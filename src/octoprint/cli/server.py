@@ -10,6 +10,8 @@ click.disable_unicode_literals_warning = True
 import logging
 import sys
 
+from past.builtins import unicode
+
 from octoprint.cli import bulk_options, standard_options, set_ctx_obj_option, get_ctx_obj_option
 
 def run_server(basedir, configfile, host, port, debug, allow_root, logging_config, verbosity, safe_mode,
@@ -99,7 +101,7 @@ def run_server(basedir, configfile, host, port, debug, allow_root, logging_confi
 		echo = lambda x: click.echo(x, err=True)
 
 		for method in logger, echo:
-			method(str(e))
+			method(unicode(e))
 			method("There was a fatal error starting up OctoPrint.")
 
 	else:

@@ -11,7 +11,7 @@ import re
 # noinspection PyCompatibility
 from builtins import range
 # noinspection PyCompatibility
-from past.builtins import basestring
+from past.builtins import basestring, unicode
 
 class SupportLocationTypes(object):
 	NONE = "none"
@@ -739,9 +739,9 @@ class Profile(object):
 			return '%s?%s?' % (pre, tag)
 
 		if (f % 1) == 0:
-			return pre + str(int(f))
+			return pre + unicode(int(f))
 
-		return pre + str(f)
+		return pre + unicode(f)
 
 	def get_gcode(self, key, extruder_count=1):
 		prefix = ""
