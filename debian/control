@@ -45,8 +45,10 @@ Build-Depends: dh-python, python3-setuptools, python3-all, debhelper (>= 9),
 Standards-Version: 3.9.6
 Homepage: https://octoprint.org
 
-Package: python3-octoprint
+Package: octoprint
 Architecture: all
+Replaces: python3-octoprint
+Conflicts: python3-octoprint
 Depends: ${misc:Depends}, ${python3:Depends},
   python3-flask-login,
   python3-flask-principal,

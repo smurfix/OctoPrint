@@ -42,7 +42,7 @@ INSTALL_REQUIRES = [
 	"pyserial>=3.4,<3.5",
 	"netaddr>=0.7.19,<0.8",
 	"watchdog>=0.9.0,<0.10",
-	"sarge==0.1.5post0",
+	"sarge==0.1.5.post0",
 	"netifaces>=0.10.9,<0.11",
 	"pylru>=1.2,<1.3",
 	"rsa>=4.0,<5",
