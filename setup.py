@@ -22,11 +22,11 @@ INSTALL_REQUIRES = [
 	# the following dependencies are non trivial to update since later versions introduce backwards incompatible
 	# changes that might affect plugins, or due to other observed problems
 
-	"flask>=0.12,<0.13",         # newer versions require newer Jinja versions
-	"Jinja2>=2.8.1,<2.9",        # Jinja 2.9 has breaking changes WRT template scope - we can't
+	"flask>=0.12",         # newer versions require newer Jinja versions
+	"Jinja2>=2.8.1",        # Jinja 2.9 has breaking changes WRT template scope - we can't
 	                             # guarantee backwards compatibility for plugins and such with that
 	                             # version, hence we need to pin to a lower version for now. See #1697
-	"tornado==4.5.3",            # a memory leak was observed in tornado >= 5, see #2585
+	"tornado",            # a memory leak was observed in tornado >= 5, see #2585
 	"regex!=2018.11.6",            # avoid broken 2018.11.6. See #2874
 
 	# anything below this should be checked on releases for new versions

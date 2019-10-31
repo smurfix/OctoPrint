@@ -1,3 +1,9 @@
+octoprint (1.4.0~dev2414+g2e6b85990-4) smurf; urgency=medium
+
+  * Less constrained dependency on flask
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 31 Oct 2019 17:38:12 +0100
+
 octoprint (1.4.0~dev2414+g2e6b85990-3) smurf; urgency=medium
 
   * rename package, dammit
