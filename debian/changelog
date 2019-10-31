@@ -1,3 +1,9 @@
+octoprint (1.4.0~dev2414+g2e6b85990-2) smurf; urgency=medium
+
+  * Ignore test stuff
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 31 Oct 2019 16:22:28 +0100
+
 octoprint (1.4.0~dev2414+g2e6b85990-1) smurf; urgency=low
 
   * source package automatically created by stdeb 0.8.5

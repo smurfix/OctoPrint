@@ -2,32 +2,81 @@ Source: octoprint
 Maintainer: Matthias Urlichs <matthias@urlichs.de>
 Section: python
 Priority: optional
-Build-Depends: dh-python, python3-setuptools, python3-all, debhelper (>= 9)
+Build-Depends: dh-python, python3-setuptools, python3-all, debhelper (>= 9),
+  python3-flask-login,
+  python3-flask-principal,
+  python3-flask-babel,
+  python3-flask-assets,
+  python3-werkzeug,
+  python3-cachelib,
+  python3-yaml,
+  python3-markdown,
+  python3-serial,
+  python3-netaddr,
+  python3-watchdog,
+  python3-sarge,
+  python3-netifaces,
+  python3-pylru,
+  python3-rsa,
+  python3-pkginfo,
+  python3-requests,
+  python3-semantic-version,
+  python3-psutil,
+  python3-click,
+  python3-awesome-slugify,
+  python3-feedparser,
+  python3-future,
+  python3-websocket-client,
+  python3-wrapt,
+  python3-emoji,
+  python3-frozendict,
+  python3-sentry-sdk,
+  python3-filetype,
+  python3-mock,
+  python3-pytest,
+  python3-pytest-doctest-custom,
+  python3-ddt,
+  python3-flake8,
+  python3-sphinx,
+  python3-sphinxcontrib-httpdomain,
+  python3-sphinxcontrib-mermaid,
+  python3-sphinx-rtd-theme,
+  python3-readthedocs-sphinx-ext,
 Standards-Version: 3.9.6
 Homepage: https://octoprint.org
 
 Package: python3-octoprint
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}
+Depends: ${misc:Depends}, ${python3:Depends},
+  python3-flask-login,
+  python3-flask-principal,
+  python3-flask-babel,
+  python3-flask-assets,
+  python3-werkzeug,
+  python3-cachelib,
+  python3-yaml,
+  python3-markdown,
+  python3-serial,
+  python3-netaddr,
+  python3-watchdog,
+  python3-sarge,
+  python3-netifaces,
+  python3-pylru,
+  python3-rsa,
+  python3-pkginfo,
+  python3-requests,
+  python3-semantic-version,
+  python3-psutil,
+  python3-click,
+  python3-awesome-slugify,
+  python3-feedparser,
+  python3-future,
+  python3-websocket-client,
+  python3-wrapt,
+  python3-emoji,
+  python3-frozendict,
+  python3-sentry-sdk,
+  python3-filetype,
 Description: The snappy web interface for your 3D printer
- #  OctoPrint
- .
- .
- ![GitHub release](https://img.shields.io/github/release/foosel/OctoPrint.svg?colorB=brightgreen)
- [![Travis build status](https://img.shields.io/travis/foosel/OctoPrint.svg)](https://travis-ci.org/foosel/OctoPrint)
- [![Discourse topics](https://img.shields.io/discourse/https/community.octoprint.org/users.svg)](https://community.octoprint.org)
- [![IRC](https://img.shields.io/badge/chat-on%20irc-brightgreen.svg)](https://chat.octoprint.org)
- [![Twitter Follow](https://img.shields.io/twitter/follow/OctoPrint3d.svg?style=social&label=Follow)](https://twitter.com/OctoPrint3d)
- .
- .
  OctoPrint provides a snappy web interface for controlling consumer 3D printers. It is Free Software
  and released under the [GNU Affero General Public License V3](http://www.gnu.org/licenses/agpl.html).
- .
- Its website can be found at [octoprint.org](https://octoprint.org/?utm_source=github&utm_medium=readme).
- .
- The community forum is available at [community.octoprint.org](https://community.octoprint.org/?utm_source=github&utm_medium=readme).
- .
- The official IRC channel is [#octoprint on freenode](https://chat.octoprint.org). Its logs can be found [here](https://freenode.logbot.info/octoprint).
- .
- The FAQ can be accessed by following [faq.octoprint.org](https://faq.octoprint.org/?utm_source=github&utm_medium=readme).
-

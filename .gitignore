@@ -41,3 +41,5 @@ venv35
 venv36
 venv37
 /.pybuild/
+/t/
+/t2/
