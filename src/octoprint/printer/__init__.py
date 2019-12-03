@@ -1,4 +1,6 @@
-# coding=utf-8
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 """
 This module defines the interface for communicating with a connected printer.
 
@@ -14,8 +16,6 @@ abstracted version of the actual printer communication.
 .. autoclass:: PrinterCallback
    :members:
 """
-
-from __future__ import absolute_import, division, print_function
 
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
@@ -44,10 +44,10 @@ class PrinterInterface(object):
 	valid_axes = ("x", "y", "z", "e")
 	"""Valid axes identifiers."""
 
-	valid_tool_regex = re.compile("^(tool\d+)$")
+	valid_tool_regex = re.compile(r"^(tool\d+)$")
 	"""Regex for valid tool identifiers."""
 
-	valid_heater_regex = re.compile("^(tool\d+|bed)$")
+	valid_heater_regex = re.compile(r"^(tool\d+|bed|chamber)$")
 	"""Regex for valid heater identifiers."""
 
 	@classmethod
@@ -419,9 +419,9 @@ class PrinterInterface(object):
 		    tags (set of str): An optional set of tags to attach to the command(s) throughout their lifecycle
 		"""
 		if self.is_printing():
-			self.pause_print(tags=tags)
+			self.pause_print(tags=tags, *args, **kwargs)
 		elif self.is_paused():
-			self.resume_print(tags=tags)
+			self.resume_print(tags=tags, *args, **kwargs)
 
 	def cancel_print(self, tags=None, *args, **kwargs):
 		"""
@@ -579,6 +579,15 @@ class PrinterInterface(object):
 
 		Arguments:
 		    callback (PrinterCallback): The callback object to unregister.
+		"""
+		raise NotImplementedError()
+
+	def send_initial_callback(self, callback):
+		"""
+		Sends the initial printer update to :class:`PrinterCallback`.
+
+		Arguments:
+			callback (PrinterCallback): The callback object to send initial data to.
 		"""
 		raise NotImplementedError()
 

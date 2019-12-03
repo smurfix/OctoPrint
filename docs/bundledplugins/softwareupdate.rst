@@ -196,6 +196,10 @@ Version checks
     * ``checkout_folder``: (mandatory) The full path to the folder with a valid git
       repository to check.
 
+  * ``pypi_release``: Checks `pypi.org <https://pypi.org>`_ for new releases of a specified package.
+
+    * ``package``: (mandatory) Name of the package which to check.
+
   * ``command_line``: Uses a provided script to determine whether an update
     is available. Additional config parameters:
 
@@ -325,6 +329,29 @@ The same, but tracking all commits pushed to branch ``devel`` (thus allowing
            branch: devel
            pip: 'https://github.com/someUser/OctoPrint-SomePlugin/archive/{target}.zip'
 
+.. _sec-bundledplugins-softwareupdate-events:
+
+Events
+------
+
+plugin_softwareupdate_update_succeeded
+  An update succeeded.
+
+  Payload:
+
+    * ``target``: update target
+    * ``from_version``: version from which was updated
+    * ``to_version``: version to which was updated
+
+plugin_softwareupdate_update_failed
+  An update failed.
+
+  Payload:
+
+    * ``target``: update target
+    * ``from_version``: version from which was updated
+    * ``to_version``: version to which was updated
+
 .. _sec-bundledplugins-softwareupdate-hooks:
 
 Hooks
@@ -362,8 +389,8 @@ octoprint.plugin.softwareupdate.check_config
 
    .. code-block:: python
 
-      # coding=utf-8
-      from __future__ import absolute_import
+      # -*- coding: utf-8 -*-
+      from __future__ import absolute_import, unicode_literals
 
       def get_update_information(*args, **kwargs):
           return dict(

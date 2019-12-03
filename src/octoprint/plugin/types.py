@@ -1,4 +1,6 @@
-# coding=utf-8
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 """
 This module bundles all of OctoPrint's supported plugin implementation types as well as their common parent
 class, :class:`OctoPrintPlugin`.
@@ -15,8 +17,6 @@ Please note that the plugin implementation types are documented in the section
    :members:
 
 """
-
-from __future__ import absolute_import, division, print_function
 
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
@@ -66,7 +66,7 @@ class OctoPrintPlugin(Plugin):
 
 	.. attribute:: _app_session_manager
 
-	   The :class:`~octoprint.users.SessionManager` instance. Injected by the plugin core system upon initialization of
+	   The :class:`~octoprint.access.users.SessionManager` instance. Injected by the plugin core system upon initialization of
 	   the implementation.
 
 	.. attribute:: _plugin_lifecycle_manager
@@ -76,7 +76,7 @@ class OctoPrintPlugin(Plugin):
 
 	.. attribute:: _user_manager
 
-	   The :class:`~octoprint.users.UserManager` instance. Injected by the plugin core system upon initialization
+	   The :class:`~octoprint.access.users.UserManager` instance. Injected by the plugin core system upon initialization
 	   of the implementation.
 
 	.. attribute:: _connectivity_checker
@@ -794,7 +794,7 @@ class UiPlugin(OctoPrintPlugin, SortablePlugin):
 	def get_ui_custom_etag(self):
 		"""
 		Allows to use a custom way to calculate the ETag, instead of the default method (hashing
-		OctoPrint's version, current ``UI_API_KEY``, tracked file paths and ``LastModified`` value).
+		OctoPrint's version, tracked file paths and ``LastModified`` value).
 
 		Returns:
 		    str: An alternatively calculated ETag value. Ignored if ``None`` is returned (default).
@@ -1391,8 +1391,9 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
 	# noinspection PyMethodMayBeStatic
 	def is_blueprint_protected(self):
 		"""
-		Whether a valid API key is needed to access the blueprint (the default) or not. Note that this only restricts
-		access to the blueprint's dynamic methods, static files are always accessible without API key.
+		Whether a login session is needed to access the blueprint if the forcelogin plugin is enabled or not. Requiring
+		a session is the default. Note that this only restricts access to the blueprint's dynamic methods, static files
+		are always accessible.
 		"""
 
 		return True
@@ -1496,6 +1497,8 @@ class SettingsPlugin(OctoPrintPlugin):
 		from flask_login import current_user
 		import copy
 
+		from octoprint.access.permissions import Permissions
+
 		data = copy.deepcopy(self._settings.get_all_data(merged=True))
 		if self.config_version_key in data:
 			del data[self.config_version_key]
@@ -1539,8 +1542,8 @@ class SettingsPlugin(OctoPrintPlugin):
 					else:
 						node[key] = None
 
-		conditions = dict(user=lambda: current_user is not None and not current_user.is_anonymous(),
-		                  admin=lambda: current_user is not None and not current_user.is_anonymous() and current_user.is_admin(),
+		conditions = dict(user=lambda: current_user is not None and not current_user.is_anonymous,
+		                  admin=lambda: current_user is not None and current_user.has_permission(Permissions.SETTINGS),
 		                  never=lambda: False)
 
 		for level, condition in conditions.items():
@@ -1616,8 +1619,8 @@ class SettingsPlugin(OctoPrintPlugin):
 		"""
 		Retrieves the list of paths in the plugin's settings which be restricted on the REST API.
 
-		Override this in your plugin's implementation to restrict whether a path should only be returned to logged in
-		users & admins, only to admins, or never on the REST API.
+		Override this in your plugin's implementation to restrict whether a path should only be returned to users with
+		the SETTINGS permission, any logged in users, or never on the REST API.
 
 		Return a ``dict`` with the keys ``admin``, ``user``, ``never`` mapping to a list of paths (as tuples or lists of
 		the path elements) for which to restrict access via the REST API accordingly. Paths returned for the ``admin``
@@ -1853,8 +1856,9 @@ class SlicerPlugin(OctoPrintPlugin):
 		    The human readable name of the slicer. This will be displayed to the user during slicer selection.
 		same_device
 		    True if the slicer runs on the same device as OctoPrint, False otherwise. Slicers running on the same
-		    device will not be allowed to slice while a print is running due to performance reasons. Slice requests
-		    against slicers running on the same device will result in an error.
+		    device will not be allowed to slice on systems with less than two CPU cores (or an unknown number) while a
+		    print is running due to performance reasons. Slice requests against slicers running on the same device and
+		    less than two cores will result in an error.
 		progress_report
 		    ``True`` if the slicer can report back slicing progress to OctoPrint ``False`` otherwise.
 		source_file_types
@@ -1876,6 +1880,21 @@ class SlicerPlugin(OctoPrintPlugin):
 			source_file_types=["model"],
 			destination_extensions=["gco", "gcode", "g"]
 		)
+
+	# noinspection PyMethodMayBeStatic
+	def get_slicer_extension_tree(self):
+		"""
+		Fetch additional entries to put into the extension tree for accepted files
+
+		By default, a subtree for ``model`` files with ``stl`` extension is returned. Slicers who want to support
+		additional/other file types will want to override this.
+
+		For the extension tree format, take a look at the docs of the :ref:`octoprint.filemanager.extension_tree hook <sec-plugins-hook-filemanager-extensiontree>`.
+
+		Returns: (dict) a dictionary containing a valid extension subtree.
+		"""
+		from octoprint.filemanager import ContentTypeMapping
+		return dict(model=dict(stl=ContentTypeMapping(["stl"], "application/sla")))
 
 	def get_slicer_profiles(self, profile_path):
 		"""
@@ -2059,20 +2078,3 @@ class ProgressPlugin(OctoPrintPlugin):
 		:param int progress:                Current progress as a value between 0 and 100
 		"""
 		pass
-
-
-class AppPlugin(OctoPrintPlugin):
-	"""
-	Using the :class:`AppPlugin mixin` plugins may register additional :ref:`App session key providers <sec-api-apps-sessionkey>`
-	within the system.
-
-	.. deprecated:: 1.2.0
-
-	   Refer to the :ref:`octoprint.accesscontrol.appkey hook <sec-plugins-hook-accesscontrol-appkey>` instead.
-
-	"""
-
-	# noinspection PyMethodMayBeStatic
-	def get_additional_apps(self):
-		return []
-
