@@ -110,7 +110,7 @@ class SockJSRouter(object):
         check_interval = self.settings['session_check_interval'] * 1000
         self._sessions_cleanup = ioloop.PeriodicCallback(self._sessions.expire,
                                                          check_interval,
-                                                         self.io_loop)
+                                                         self.io_loop if version_info[4] < 5 else None)
         self._sessions_cleanup.start()
 
         # Stats

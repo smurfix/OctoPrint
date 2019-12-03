@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 from collections import deque
 
-from tornado import ioloop
+from tornado import ioloop, version_info
 
 
 class MovingAverage(object):
@@ -71,7 +71,7 @@ class StatsCollector(object):
 
         self._callback = ioloop.PeriodicCallback(self._update,
                                                  1000,
-                                                 io_loop)
+                                                 io_loop if version_info[4] < 5 else None)
         self._callback.start()
 
     def _update(self):
