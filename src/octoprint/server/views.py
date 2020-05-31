@@ -12,7 +12,7 @@ import io
 from past.builtins import basestring
 
 from collections import defaultdict
-from flask import request, g, url_for, make_response, render_template, send_from_directory, redirect, abort
+from flask import request, g, url_for, make_response, render_template, send_from_directory, redirect, abort, Response
 
 import octoprint.plugin
 
@@ -418,8 +418,12 @@ def index():
 			plugin = pluginManager.get_plugin_info(forced_view, require_enabled=True)
 			if plugin is not None and isinstance(plugin.implementation, octoprint.plugin.UiPlugin):
 				response = plugin_view(plugin.implementation)
+				if _logger.isEnabledFor(logging.DEBUG) and isinstance(response, Response):
+					response.headers["X-Ui-Plugin"] = plugin._identifier
 		else:
 			response = default_view()
+			if _logger.isEnabledFor(logging.DEBUG) and isinstance(response, Response):
+				response.headers["X-Ui-Plugin"] = "_default"
 
 	else:
 		# select view from plugins and fall back on default view if no plugin will handle it
@@ -430,6 +434,8 @@ def index():
 					# plugin claims responsibility, let it render the UI
 					response = plugin_view(plugin)
 					if response is not None:
+						if _logger.isEnabledFor(logging.DEBUG) and isinstance(response, Response):
+							response.headers["X-Ui-Plugin"] = plugin._identifier
 						break
 					else:
 						_logger.warning("UiPlugin {} returned an empty response".format(plugin._identifier))
@@ -438,6 +444,8 @@ def index():
 				                  extra=dict(plugin=plugin._identifier))
 		else:
 			response = default_view()
+			if _logger.isEnabledFor(logging.DEBUG) and isinstance(response, Response):
+				response.headers["X-Ui-Plugin"] = "_default"
 
 	if response is None:
 		return abort(404)
@@ -591,9 +599,9 @@ def fetch_template_data(refresh=False):
 	# tabs
 
 	templates["tab"]["entries"] = dict(
-		temperature=(gettext("Temperature"), dict(template="tabs/temperature.jinja2", _div="temp", styles=["display: none;"], data_bind="visible: loginState.hasAnyPermissionKo(access.permissions.STATUS, access.permissions.CONTROL) && visible()")),
+		temperature=(gettext("Temperature"), dict(template="tabs/temperature.jinja2", _div="temp", styles=["display: none;"], data_bind="visible: loginState.hasAnyPermissionKo(access.permissions.STATUS, access.permissions.CONTROL)() && visible()")),
 		control=(gettext("Control"), dict(template="tabs/control.jinja2", _div="control", styles=["display: none;"], data_bind="visible: loginState.hasAnyPermissionKo(access.permissions.WEBCAM, access.permissions.CONTROL)")),
-		gcodeviewer=(gettext("GCode Viewer"), dict(template="tabs/gcodeviewer.jinja2", _div="gcode", styles=["display: none;"], data_bind="visible: loginState.hasPermissionKo(access.permissions.GCODE_VIEWER)")),
+		gcodeviewer=(gettext("GCode Viewer"), dict(template="tabs/gcodeviewer.jinja2", _div="gcode", styles=["display: none;"], data_bind="visible: loginState.hasAllPermissionsKo(access.permissions.GCODE_VIEWER, access.permissions.FILES_DOWNLOAD)")),
 		terminal=(gettext("Terminal"), dict(template="tabs/terminal.jinja2", _div="term", styles=["display: none;"], data_bind="visible: loginState.hasPermissionKo(access.permissions.MONITOR_TERMINAL)")),
 		timelapse=(gettext("Timelapse"), dict(template="tabs/timelapse.jinja2", _div="timelapse", styles=["display: none;"], data_bind="visible: loginState.hasPermissionKo(access.permissions.TIMELAPSE_LIST)"))
 	)

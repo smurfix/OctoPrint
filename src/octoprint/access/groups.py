@@ -18,32 +18,7 @@ from octoprint.settings import settings
 from octoprint.util import atomic_write
 from octoprint.access import ADMIN_GROUP, USER_GROUP, GUEST_GROUP, READONLY_GROUP
 from octoprint.access.permissions import Permissions, OctoPrintPermission
-from flask_principal import Need, Permission
-
-DEFAULT_ADMIN_PERMISSIONS = [Permissions.ADMIN]
-"""Default admin permissions are the legacy permissions from before 1.4.0"""
-
-DEFAULT_USER_PERMISSIONS = [Permissions.STATUS,
-                            Permissions.CONNECTION,
-                            Permissions.WEBCAM,
-                            Permissions.FILES_UPLOAD,
-                            Permissions.FILES_DOWNLOAD,
-                            Permissions.FILES_DELETE,
-                            Permissions.FILES_SELECT,
-                            Permissions.PRINT,
-                            Permissions.MONITOR_TERMINAL,
-                            Permissions.CONTROL,
-                            Permissions.SLICE,
-                            Permissions.TIMELAPSE_LIST,
-                            Permissions.TIMELAPSE_ADMIN]
-"""Default user permissions are the legacy permissions from before 1.4.0"""
-
-DEFAULT_GUEST_PERMISSIONS = [Permissions.STATUS,
-                             Permissions.WEBCAM,
-                             Permissions.FILES_DOWNLOAD,
-                             Permissions.TIMELAPSE_LIST,
-                             Permissions.MONITOR_TERMINAL]
-"""Default guest permissions are the legacy permissions from before 1.4.0"""
+from octoprint.vendor.flask_principal import Need, Permission
 
 
 GroupNeed = partial(Need, 'group')
@@ -151,8 +126,8 @@ class GroupManager(object):
 		return [group.key for group in groups]
 
 	def _to_groups(self, *groups):
-		return filter(lambda x: x is not None,
-		              [self._to_group(g) for g in groups])
+		return list(filter(lambda x: x is not None,
+		                   [self._to_group(g) for g in groups]))
 
 	def _to_group(self, group):
 		# noinspection PyCompatibility

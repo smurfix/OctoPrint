@@ -130,6 +130,14 @@ class PluginInfo(object):
 	Bundled plugins will automatically be assumed to be compatible.
 	"""
 
+	attr_hidden = '__plugin_hidden__'
+	"""
+	Module attribute from which to determine if the plugin's hidden or not.
+	
+	Only evaluated for bundled plugins, in order to hide them from the Plugin Manager
+	and similar places.
+	"""
+
 	attr_hooks = '__plugin_hooks__'
 	""" Module attribute from which to retrieve the plugin's provided hooks. """
 
@@ -445,6 +453,18 @@ class PluginInfo(object):
 		                                    incl_metadata=True)
 
 	@property
+	def hidden(self):
+		"""
+		Hidden flag.
+
+		Returns:
+		    bool: Whether the plugin should be flagged as hidden or not
+		"""
+		return self._get_instance_attribute(self.__class__.attr_hidden,
+		                                    default=False,
+		                                    incl_metadata=True)
+
+	@property
 	def hooks(self):
 		"""
 		Hooks provided by the plugin. Will be taken from the hooks attribute of the plugin module as defined in
@@ -600,6 +620,16 @@ class PluginInfo(object):
 							result[key] = a.value.args[0].s
 
 						break
+
+			for key in (self.__class__.attr_hidden,):
+				for a in reversed(assignments):
+					targets = extract_target_ids(a)
+					if key in targets:
+						if isinstance(a.value, ast.Name) and a.value.id in ("True", "False"):
+							result[key] = bool(a.value.id)
+
+						break
+
 		except SyntaxError:
 			self._logger.exception("Invalid syntax in {} for plugin {}".format(path, self.key))
 			self.invalid_syntax = True
@@ -1008,7 +1038,7 @@ class PluginManager(object):
 		# 1st pass: loading the plugins
 		for name, plugin in added.items():
 			try:
-				if not plugin.blacklisted and not plugin.forced_disabled:
+				if not plugin.blacklisted and not plugin.forced_disabled and not plugin.incompatible:
 					self.load_plugin(name, plugin, startup=startup, initialize_implementation=initialize_implementations)
 			except PluginNeedsRestart:
 				pass
@@ -1022,7 +1052,7 @@ class PluginManager(object):
 		# 2nd pass: enabling those plugins that need enabling
 		for name, plugin in added.items():
 			try:
-				if plugin.loaded and not plugin.forced_disabled:
+				if plugin.loaded and not plugin.forced_disabled and not plugin.incompatible:
 					if plugin.blacklisted:
 						self.logger.warning("Plugin {} is blacklisted. Not enabling it.".format(plugin))
 						continue

@@ -10,7 +10,8 @@ import logging
 
 from flask import Blueprint, request, jsonify, abort, current_app, session, make_response, g
 from flask_login import login_user, logout_user, current_user
-from flask_principal import Identity, identity_changed, AnonymousIdentity
+from werkzeug.exceptions import HTTPException
+from octoprint.vendor.flask_principal import Identity, identity_changed, AnonymousIdentity
 
 import octoprint.access.users
 import octoprint.util.net as util_net
@@ -72,6 +73,8 @@ def pluginData(name):
 		if response is not None:
 			return response
 		return NO_CONTENT
+	except HTTPException:
+		raise
 	except Exception:
 		logging.getLogger(__name__).exception("Error calling SimpleApiPlugin {}".format(name),
 		                                      extra=dict(plugin=name))
@@ -107,6 +110,8 @@ def pluginCommand(name):
 		if response is not None:
 			return response
 		return NO_CONTENT
+	except HTTPException:
+		raise
 	except Exception:
 		logging.getLogger(__name__).exception("Error while executing SimpleApiPlugin {}".format(name),
 		                                      extra=dict(plugin=name))
@@ -205,7 +210,7 @@ def apiVersion():
 @api.route("/login", methods=["POST"])
 def login():
 	data = request.get_json()
-	if data is None:
+	if not data:
 		data = request.values
 
 	if octoprint.server.userManager.enabled and "user" in data and "pass" in data:
@@ -282,6 +287,13 @@ def _logout(user):
 	if "usersession.id" in session:
 		del session["usersession.id"]
 	octoprint.server.userManager.logout_user(user)
+
+
+@api.route("/currentuser", methods=["GET"])
+def get_current_user():
+	return jsonify(name=current_user.get_name(),
+	               permissions=[permission.key for permission in current_user.effective_permissions],
+	               groups=[group.key for group in current_user.groups])
 
 
 #~~ Test utils
@@ -375,7 +387,7 @@ def _test_path(data):
 		try:
 			test_path = os.path.join(path, ".testballoon.txt")
 			with io.open(test_path, 'wb') as f:
-				f.write("Test")
+				f.write(b"Test")
 			os.remove(test_path)
 		except Exception:
 			logging.getLogger(__name__).exception("Error while testing if {} is really writable".format(path))

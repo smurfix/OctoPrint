@@ -8,7 +8,7 @@ __copyright__ = "Copyright (C) 2017 The OctoPrint Project - Released under terms
 from future.utils import with_metaclass
 from flask import g, abort
 from flask_babel import gettext
-from flask_principal import Permission, PermissionDenied, RoleNeed, Need
+from octoprint.vendor.flask_principal import Permission, PermissionDenied, RoleNeed, Need
 
 from functools import wraps
 from collections import OrderedDict, defaultdict
@@ -78,6 +78,22 @@ class OctoPrintPermission(Permission):
 
 	def get_description(self):
 		return self._description
+
+	def allows(self, identity):
+		"""Whether the identity can access this permission.
+		Overridden from Permission.allows to make sure the Identity provides ALL
+		required needs instead of ANY required need.
+
+		:param identity: The identity
+		"""
+		if self.needs and len(self.needs.intersection(identity.provides)) != len(self.needs):
+			return False
+
+		if self.excludes and self.excludes.intersection(identity.provides):
+			return False
+
+		return True
+
 
 	def union(self, other):
 		"""Create a new OctoPrintPermission with the requirements of the union of this
@@ -259,8 +275,9 @@ class Permissions(with_metaclass(PermissionsMetaClass)):
 	                                             default_groups=[ADMIN_GROUP])
 
 	STATUS                 = OctoPrintPermission("Status",
-	                                             gettext("Allows to gather status information, e.g. job progress, "
-	                                                     "printer state, temperatures, ..."),
+	                                             gettext("Allows to gather basic status information, e.g. job progress, "
+	                                                     "printer state, temperatures, ... Mandatory for the default UI "
+	                                                     "to work"),
 	                                             RoleNeed("status"),
 	                                             default_groups=[USER_GROUP, READONLY_GROUP])
 
@@ -292,27 +309,26 @@ class Permissions(with_metaclass(PermissionsMetaClass)):
 	FILES_DOWNLOAD         = OctoPrintPermission("File Download",
 	                                             gettext("Allows users to download files. The GCODE viewer is "
 	                                                     "affected by this as well."),
-	                                             RoleNeed("files_download"), FILES_LIST,
+	                                             RoleNeed("files_download"),
 	                                             default_groups=[USER_GROUP, READONLY_GROUP])
 	FILES_DELETE           = OctoPrintPermission("File Delete",
 	                                             gettext("Allows users to delete files"),
-	                                             RoleNeed("files_delete"), FILES_LIST,
+	                                             RoleNeed("files_delete"),
 	                                             default_groups=[USER_GROUP])
 	FILES_SELECT           = OctoPrintPermission("File Select",
 	                                             gettext("Allows to select a file for printing"),
-	                                             RoleNeed("files_select"), FILES_LIST,
+	                                             RoleNeed("files_select"),
 	                                             default_groups=[USER_GROUP])
 
 	PRINT                  = OctoPrintPermission("Print",
-	                                             gettext("Allows to start, pause and cancel a print job. Includes the \"Select\" "
-	                                                     "permission"),
-	                                             RoleNeed("print"), FILES_SELECT,
+	                                             gettext("Allows to start, pause and cancel a print job"),
+	                                             RoleNeed("print"),
 	                                             default_groups=[USER_GROUP])
 
 	GCODE_VIEWER           = OctoPrintPermission("GCODE viewer",
-	                                             gettext("Allows access to the GCODE viewer. Includes the \"File Download\""
-	                                                     "permission."),
-	                                             RoleNeed("gcodeviewer"), FILES_DOWNLOAD,
+	                                             gettext("Allows access to the GCODE viewer if the \"File Download\""
+	                                                     "permission is also set."),
+	                                             RoleNeed("gcodeviewer"),
 	                                             default_groups=[USER_GROUP, READONLY_GROUP])
 
 	MONITOR_TERMINAL       = OctoPrintPermission("Terminal",
@@ -351,8 +367,13 @@ class Permissions(with_metaclass(PermissionsMetaClass)):
 	                                             RoleNeed("timelapse_admin"), TIMELAPSE_LIST, TIMELAPSE_DOWNLOAD,
 	                                             default_groups=[USER_GROUP])
 
-	SETTINGS               = OctoPrintPermission("Settings",
-	                                             gettext("Allows to manage settings"),
+	SETTINGS_READ          = OctoPrintPermission("Settings Access",
+	                                             gettext("Allows to read non sensitive settings. Mandatory for the "
+	                                                     "default UI to work."),
+	                                             RoleNeed("settings_read"),
+	                                             default_groups=[USER_GROUP, READONLY_GROUP])
+	SETTINGS               = OctoPrintPermission("Settings Admin",
+	                                             gettext("Allows to manage settings and also to read sensitive settings"),
 	                                             RoleNeed("settings"),
 	                                             dangerous=True)
 

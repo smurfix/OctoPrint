@@ -21,7 +21,7 @@ from builtins import range, bytes
 
 from octoprint.settings import settings as s
 
-from octoprint.util import atomic_write, to_bytes, deprecated, monotonic_time
+from octoprint.util import atomic_write, to_bytes, deprecated, monotonic_time, generate_api_key
 from octoprint.util import get_fully_qualified_classname as fqcn
 
 from octoprint.access.permissions import Permissions, OctoPrintPermission
@@ -55,7 +55,10 @@ class UserManager(GroupChangeListener, object):
 		if self.enabled:
 			return AnonymousUser([self._group_manager.guest_group])
 		else:
-			return AdminUser([self._group_manager.admin_group])
+			return AdminUser([self._group_manager.admin_group, self._group_manager.user_group])
+
+	def api_user_factory(self):
+		return ApiUser([self._group_manager.admin_group, self._group_manager.user_group])
 
 	@property
 	def enabled(self):
@@ -102,11 +105,11 @@ class UserManager(GroupChangeListener, object):
 				self._logger.exception("Error in on_user_logged_in on {!r}".format(listener),
 				                       extra=dict(callback=fqcn(listener)))
 
-		self._logger.debug("Logged in user: %r" % user)
+		self._logger.info("Logged in user: {}".format(user.get_id()))
 
 		return user
 
-	def logout_user(self, user):
+	def logout_user(self, user, stale=False):
 		if user is None or user.is_anonymous or isinstance(user, AdminUser):
 			return
 
@@ -126,23 +129,27 @@ class UserManager(GroupChangeListener, object):
 				pass
 
 		if sessionid in self._session_users_by_session:
-			del self._session_users_by_session[sessionid]
+			try:
+				del self._session_users_by_session[sessionid]
+			except KeyError:
+				pass
 
 		for listener in self._login_status_listeners:
 			try:
-				listener.on_user_logged_out(user)
+				listener.on_user_logged_out(user, stale=stale)
 			except Exception:
 				self._logger.exception("Error in on_user_logged_out on {!r}".format(listener),
 				                       extra=dict(callback=fqcn(listener)))
 
-		self._logger.debug("Logged out user: %r" % user)
+		self._logger.info("Logged out user: {}".format(user.get_id()))
 
 	def _cleanup_sessions(self):
 		for session, user in list(self._session_users_by_session.items()):
 			if not isinstance(user, SessionUser):
 				continue
 			if user.created + (24 * 60 * 60) < monotonic_time():
-				self.logout_user(user)
+				self._logger.info("Cleaning up user session {} for user {}".format(session, user.get_id()))
+				self.logout_user(user, stale=True)
 
 	@staticmethod
 	def create_password_hash(password, salt=None, settings=None):
@@ -433,7 +440,7 @@ class LoginStatusListener(object):
 	def on_user_logged_in(self, user):
 		pass
 
-	def on_user_logged_out(self, user):
+	def on_user_logged_out(self, user, stale=False):
 		pass
 
 	def on_user_modified(self, user):
@@ -743,7 +750,7 @@ class FilebasedUserManager(UserManager):
 			raise UnknownUser(username)
 
 		user = self._users[username]
-		user._apikey = ''.join('%02X' % z for z in bytes(uuid.uuid4().bytes))
+		user._apikey = generate_api_key()
 		self._dirty = True
 		self._save()
 		return user._apikey
@@ -1123,6 +1130,12 @@ class User(UserMixin):
 		return list(self._groups)
 
 	@property
+	def effective_permissions(self):
+		if self._permissions is None:
+			return []
+		return list(filter(lambda p: p is not None and self.has_permission(p), Permissions.all()))
+
+	@property
 	def needs(self):
 		needs = set()
 
@@ -1140,8 +1153,6 @@ class User(UserMixin):
 		return self.has_needs(*permission.needs)
 
 	def has_needs(self, *needs):
-		if Permissions.ADMIN in self._permissions:
-			return True
 		return set(needs).issubset(self.needs)
 
 	def __repr__(self):

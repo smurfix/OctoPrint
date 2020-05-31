@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OctoPrint\n"
 "Report-Msgid-Bugs-To: i18n@octoprint.org\n"
-"POT-Creation-Date: 2019-11-22 18:38+0100\n"
-"PO-Revision-Date: 2019-11-25 10:47+0100\n"
+"POT-Creation-Date: 2020-02-26 09:14+0100\n"
+"PO-Revision-Date: 2020-02-26 09:15+0100\n"
 "Last-Translator: Gina Häußge <osd@foosel.net>\n"
 "Language: de\n"
 "Language-Team: German (http://www.transifex.com/projects/p/octoprint/language/de/)\n"
@@ -19,86 +19,89 @@ msgstr ""
 "Generated-By: Babel 2.6.0\n"
 "X-Generator: Poedit 2.0.4\n"
 
-#: src/octoprint/access/permissions.py:256
+#: src/octoprint/access/permissions.py:272
 msgid "Admin is allowed to do everything"
 msgstr "Admins dürfen alles tun"
 
-#: src/octoprint/access/permissions.py:262
-msgid "Allows to gather status information, e.g. job progress, printer state, temperatures, ..."
-msgstr "Erlaubt Zugriff auf Statusinformationen wie Druckfortschritt, Druckerstatus, Temperaturen, ..."
+#: src/octoprint/access/permissions.py:278
+msgid "Allows to gather basic status information, e.g. job progress, printer state, temperatures, ... Mandatory for the default UI to work"
+msgstr "Erlaubt Zugriff auf Statusinformationen wie Druckfortschritt, Druckerstatus, Temperaturen, ... Obligatorisch für die korrekte Funktion des Userinterfaces."
 
-#: src/octoprint/access/permissions.py:268
+#: src/octoprint/access/permissions.py:285
 msgid "Allows to connect to and disconnect from a printer"
 msgstr "Erlaubt Verbindung und Verbindungstrennung zum Drucker"
 
-#: src/octoprint/access/permissions.py:273
+#: src/octoprint/access/permissions.py:290
 msgid "Allows to watch the webcam stream"
 msgstr "Erlaubt Einbettung des Webcamstreams"
 
-#: src/octoprint/access/permissions.py:278
+#: src/octoprint/access/permissions.py:295
 msgid "Allows to run system commands, e.g. restart OctoPrint, shutdown or reboot the system"
 msgstr "Erlaubt die Ausführung von Systembefehlen, z.B. OctoPrint neu starten, System herunterfahren oder neu starten, ..."
 
-#: src/octoprint/access/permissions.py:284
+#: src/octoprint/access/permissions.py:301
 msgid "Allows to retrieve a list of all uploaded files, includingtheir metadata (e.g. date, file size, analysis results, ...)"
 msgstr "Erlaubt das Abrufen eines Liste aller Uploads, inkl. ihrer Metadaten (z.B. Datum, Dateigröße, Analyseergebnisse, …)"
 
-#: src/octoprint/access/permissions.py:289
+#: src/octoprint/access/permissions.py:306
 msgid "Allows users to upload new files"
 msgstr "Erlaubt das Hochladen neuer Dateien"
 
-#: src/octoprint/access/permissions.py:293
+#: src/octoprint/access/permissions.py:310
 msgid "Allows users to download files. The GCODE viewer is affected by this as well."
 msgstr "Erlaubt das Herunterladen von Dateien. Der GCODE viewer benötigt dieses Recht."
 
-#: src/octoprint/access/permissions.py:298
+#: src/octoprint/access/permissions.py:315
 msgid "Allows users to delete files"
 msgstr "Erlaubt Nutzern, Dateien zu löschen"
 
-#: src/octoprint/access/permissions.py:302
+#: src/octoprint/access/permissions.py:319
 msgid "Allows to select a file for printing"
 msgstr "Erlaubt die Auswahl einer Datei zum Drucken"
 
-#: src/octoprint/access/permissions.py:307
-msgid "Allows to start, pause and cancel a print job. Includes the \"Select\" permission"
-msgstr "Erlaubt das starten, pausieren und abbrechen eines Druckauftrags. Beinhaltet die \"Select\" Berechtigung."
+#: src/octoprint/access/permissions.py:324
+msgid "Allows to start, pause and cancel a print job"
+msgstr "Erlaubt das starten, pausieren und abbrechen eines Druckauftrags"
 
-#: src/octoprint/access/permissions.py:313
-msgid "Allows access to the GCODE viewer. Includes the \"File Download\"permission."
-msgstr "Erlaubt den Zugriff auf den GCODE viewer. Beinhaltet die \"File Download\" Berechtigung."
+#: src/octoprint/access/permissions.py:329
+msgid "Allows access to the GCODE viewer if the \"File Download\"permission is also set."
+msgstr "Erlaubt den Zugriff auf den GCODE viewer falls die \"File Download\" Berechtigung ebenfalls gesetzt ist."
 
-#: src/octoprint/access/permissions.py:319
+#: src/octoprint/access/permissions.py:335
 msgid "Allows to watch the terminal tab but not to send commands to the printer from it"
 msgstr "Erlaubt lesenden Zugriff auf das Terminal Tab. Das Senden von Befehlen zum Drucker ist nicht gestattet."
 
-#: src/octoprint/access/permissions.py:325
+#: src/octoprint/access/permissions.py:341
 msgid "Allows to control of the printer by using the temperature controls,the control tab or sending commands through the terminal."
 msgstr "Erlaubt vollen Zugriff auf den Drucker, inkl. Temperatur, Steuerung oder Senden individueller Befehle über das Terminal."
 
-#: src/octoprint/access/permissions.py:331
+#: src/octoprint/access/permissions.py:347
 msgid "Allows to slice files"
 msgstr "Erlaubt das Slicen von Dateien"
 
-#: src/octoprint/access/permissions.py:336
+#: src/octoprint/access/permissions.py:352
 msgid "Allows to list timelapse videos"
 msgstr "Erlaubt die Auflistung von Zeitrafferaufnahmen"
 
-#: src/octoprint/access/permissions.py:340
+#: src/octoprint/access/permissions.py:356
 msgid "Allows to download timelapse videos"
 msgstr "Erlaubt das Herunterladen von Zeitrafferaufnahmen"
 
-#: src/octoprint/access/permissions.py:344
-#, python-format
+#: src/octoprint/access/permissions.py:360
 msgid "Allows to delete timelapse videos and unrendered timelapses"
 msgstr "Erlaubt das Löschen von Zeitrafferaufnahmen und ungerenderten Zeitraffern"
 
-#: src/octoprint/access/permissions.py:348
+#: src/octoprint/access/permissions.py:364
 msgid "Allows to change the timelapse settings and delete or render unrendered timelapses. Includes the \"Timelapse List\",\"Timelapse Delete\" and \"Timelapse Download\" permissions"
 msgstr "Erlaubt die Änderung von Zeitraffereinstellungen sowie das Löschen oder Rendern unprozessierter Zeitrafferaufnahmen."
 
-#: src/octoprint/access/permissions.py:355
-msgid "Allows to manage settings"
-msgstr "Erlaubt die Verwaltung der Einstellungen"
+#: src/octoprint/access/permissions.py:371
+msgid "Allows to read non sensitive settings. Mandatory for the default UI to work."
+msgstr "Erlaubt lesenden Zugriff auf allgemeine Einstellungen (jedoch keine kritischen). Obligatorisch für die korrekte Funktion des Userinterfaces."
+
+#: src/octoprint/access/permissions.py:376
+msgid "Allows to manage settings and also to read sensitive settings"
+msgstr "Erlaubt vollen Zugriff auf alle Einstellungen"
 
 #: src/octoprint/plugins/action_command_prompt/__init__.py:69
 msgid "Allows to see and interact with printer prompts"
@@ -189,7 +192,7 @@ msgstr "Erlaubt die Verwaltung von Ankündigungen. Beinhaltet die \"Read announc
 msgid "Announcements"
 msgstr "Ankündigungen"
 
-#: src/octoprint/plugins/announcements/__init__.py:533
+#: src/octoprint/plugins/announcements/__init__.py:536
 msgid "Without this plugin you might miss important announcements regarding security or other critical issues concerning OctoPrint."
 msgstr "Ohne dieses Plugin könntest du wichtige Benachrichtigung hinsichtlich Security oder kritischer Fehler in OctoPrint verpassen."
 
@@ -210,13 +213,13 @@ msgid "You can edit your announcement subscriptions under Settings > Announcemen
 msgstr "Du kannst deine Benachrichtigungsabonnements unter Einstellungen > Benachrichtigungen konfigurieren."
 
 #: src/octoprint/plugins/announcements/static/js/announcements.js:276
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1084
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1085
 #: src/octoprint/static/js/app/viewmodels/loginstate.js:117
 msgid "Later"
 msgstr "Später"
 
 #: src/octoprint/plugins/announcements/static/js/announcements.js:282
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1091
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1092
 msgid "Mark read"
 msgstr "Gelesen"
 
@@ -269,16 +272,16 @@ msgstr "Aktionen"
 msgid "Refresh Announcements"
 msgstr "Ankündigungen aktualisieren"
 
-#: src/octoprint/plugins/appkeys/__init__.py:123
+#: src/octoprint/plugins/appkeys/__init__.py:122
 msgid "Allows administrating all application keys"
 msgstr "Erlaubt die Administration aller Applicationkeys"
 
+#: src/octoprint/plugins/appkeys/__init__.py:131
 #: src/octoprint/plugins/appkeys/__init__.py:132
-#: src/octoprint/plugins/appkeys/__init__.py:133
 msgid "Application Keys"
 msgstr "Application Keys"
 
-#: src/octoprint/plugins/appkeys/__init__.py:439
+#: src/octoprint/plugins/appkeys/__init__.py:438
 msgid "Without this plugin third party clients will no longer be able to obtain an API key without you manually copy-pasting it."
 msgstr "Ohne dieses Plugin können Third Party Clients keine API Keys mehr erlangen, ohne dass du sie manuell übertragen musst."
 
@@ -441,7 +444,7 @@ msgstr "Erlaubt Zugriff auf und Wiederherstellung von Backups"
 msgid "Backup & Restore"
 msgstr "Sicherung & Wiederherstellung"
 
-#: src/octoprint/plugins/backup/__init__.py:967
+#: src/octoprint/plugins/backup/__init__.py:970
 msgid "Without this plugin you will no longer be able to backup & restore your OctoPrint settings and data."
 msgstr "Ohne dieses Plugin kannst du deine OctoPrint Einstellung und Daten nicht länger sichern & wiederherstellen."
 
@@ -664,13 +667,13 @@ msgid "Server Commands"
 msgstr "Serverbefehle"
 
 #: src/octoprint/plugins/corewizard/subwizards.py:50
-#: src/octoprint/server/views.py:603
+#: src/octoprint/server/views.py:623
 msgid "Webcam & Timelapse"
 msgstr "Webcam & Zeitraffer"
 
 #: src/octoprint/plugins/corewizard/subwizards.py:65
 #: src/octoprint/plugins/corewizard/templates/corewizard_acl_wizard.jinja2:1
-#: src/octoprint/server/views.py:609
+#: src/octoprint/server/views.py:629
 msgid "Access Control"
 msgstr "Zugangsbeschränkung"
 
@@ -762,6 +765,7 @@ msgstr "<p>\n"
 "</p>"
 
 #: src/octoprint/plugins/corewizard/templates/corewizard_acl_wizard.jinja2:27
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:24
 #: src/octoprint/templates/navbar/login.jinja2:7
 #: src/octoprint/templates/navbar/login.jinja2:8
 #: src/octoprint/templates/snippets/settings/accesscontrol/users.jinja2:83
@@ -769,6 +773,7 @@ msgid "Username"
 msgstr "Username"
 
 #: src/octoprint/plugins/corewizard/templates/corewizard_acl_wizard.jinja2:33
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:25
 #: src/octoprint/templates/dialogs/usersettings/access.jinja2:3
 #: src/octoprint/templates/navbar/login.jinja2:10
 #: src/octoprint/templates/navbar/login.jinja2:11
@@ -1142,7 +1147,7 @@ msgstr "\n"
 msgid "Allows to download and delete log files and list and set log levels."
 msgstr "Erlaubt den Download von Logdateien sowie deren Löschung und das Setzen von Loglevels."
 
-#: src/octoprint/plugins/logging/__init__.py:223
+#: src/octoprint/plugins/logging/__init__.py:226
 msgid "Without this plugin you will no longer be able to retrieve OctoPrint's logs or modify the current logging levels through the web interface."
 msgstr "Ohne dieses Plugin kannst du OctoPrints Logfiles nicht mehr über das Webinterface herunterladen und auch die aktuellen Loglevel modifizieren."
 
@@ -1221,36 +1226,74 @@ msgstr "Entfernen"
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: src/octoprint/plugins/pi_support/__init__.py:219
+#: src/octoprint/plugins/loginui/__init__.py:115
+msgid "Without this plugin there will be no dedicated login page for users in case anonymous read only access is disabled - instead your non logged in visitors will get a broken UI."
+msgstr "Ohne dieses Plugin wird es keine Loginpage für User geben, falls anonymer Readonly-Zugriff deaktiviert ist - statt dessen wird deinen nicht eingeloggten Nutzerne eine kaputte UI präsentiert."
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:19
+msgid "Please log in"
+msgstr "Bitte einloggen"
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:21
+msgid "Incorrect username or password."
+msgstr "Username oder Passwort inkorrekt."
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:22
+msgid "Server is currently offline."
+msgstr "Der Server ist offline."
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:22
+msgid "Reconnect..."
+msgstr "Erneut verbinden..."
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:26
+#: src/octoprint/templates/navbar/login.jinja2:9
+msgid "Forgot password?"
+msgstr "Passwort vergessen?"
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:28
+#: src/octoprint/templates/navbar/login.jinja2:13
+msgid "Remember me"
+msgstr "Login merken"
+
+#: src/octoprint/plugins/loginui/templates/loginui_index.jinja2:30
+msgid "Log in"
+msgstr "Einloggen"
+
+#: src/octoprint/plugins/pi_support/__init__.py:199
+msgid "Allows to check for the Pi's throttling status and environment info"
+msgstr "Erlaubt die Abfrage des Throttlestatus und der Umgebungsinformationen des Raspberry Pis."
+
+#: src/octoprint/plugins/pi_support/__init__.py:235
 #: src/octoprint/plugins/pi_support/templates/pi_support_settings.jinja2:1
 msgid "Pi Support"
 msgstr "Pi Support"
 
-#: src/octoprint/plugins/pi_support/__init__.py:317
+#: src/octoprint/plugins/pi_support/__init__.py:333
 msgid "Without this plugin OctoPrint will no longer be able to provide additional information about your Pi, which will make it more tricky to help you if you need support."
 msgstr "Ohne dieses Plugin kann OctoPrint nicht mehr zusätzliche Informationen über deinen Pi Instanz zur Verfügung stellen, was es ggf. schwieriger macht, dir zu helfen, falls du Support brauchst."
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:29
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:36
 msgid "running on"
 msgstr "auf"
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:29
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:36
 msgid "OctoPi"
 msgstr "OctoPi"
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:67
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:74
 msgid "Undervoltage. Make sure your power supply and cabling are providing enough power to the Pi."
 msgstr "Zu niedrige Spannung. Stelle sicher, dass dein Netzteil und die Verkabelung dem Pi genug Strom liefern."
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:68
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:75
 msgid "Frequency capping due to overheating. Improve cooling of the CPU and GPU."
 msgstr "Heruntertaktung aufgrund von Überhitzung. Verbessere die Kühlung von CPU und GPU."
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:69
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:76
 msgid "A blinking symbol indicates a current issue, a non blinking symbol one that was observed some time since the Pi booted up."
 msgstr "Ein blinkendes Symbol zeigt ein aktuelles Problem an, ein nicht blinkendes ein Problem, das irgendwann seit dem Bootup des Pis aufgetreten ist."
 
-#: src/octoprint/plugins/pi_support/static/js/pi_support.js:70
+#: src/octoprint/plugins/pi_support/static/js/pi_support.js:77
 msgid "Click the symbol in the navbar for more information."
 msgstr "Klick für weitere Informationen auf das Symbol in der Navbar."
 
@@ -1315,25 +1358,14 @@ msgstr "Es gibt eine Nachricht zu einem deiner installierten Plugins."
 msgid "There are %(count)d plugin notices for one or more of your installed plugins."
 msgstr "Es gibt %(count)d Nachrichten zu einem oder mehreren deiner installierten Plugins."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:289
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:550
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:290
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:551
 msgid "Installing plugin..."
 msgstr "Installiere Plugin..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:289
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:290
 msgid "Installing plugin from uploaded archive..."
 msgstr "Installiere Plugin von hochgeladenem Archiv..."
-
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:310
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:458
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:574
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:615
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:665
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:697
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:906
-#: src/octoprint/plugins/tracking/static/js/usage.js:83
-msgid "Something went wrong"
-msgstr "Etwas ist schief gegangen"
 
 #: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:311
 #: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:459
@@ -1341,282 +1373,293 @@ msgstr "Etwas ist schief gegangen"
 #: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:616
 #: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:666
 #: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:698
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:907
+#: src/octoprint/plugins/tracking/static/js/usage.js:83
+msgid "Something went wrong"
+msgstr "Etwas ist schief gegangen"
+
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:312
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:460
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:576
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:617
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:667
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:699
 msgid "Please consult octoprint.log for details"
 msgstr "Bitte konsultiere octoprint.log für Details"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:479
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:480
 #, python-format
 msgid "You are about to disable \"%(name)s\"."
 msgstr "Du bist im Begriff \"%(name)s\" zu deaktivieren."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:482
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:483
 msgid "This is not recommended"
 msgstr "Das ist nicht empfohlen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:484
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:485
 msgid "Do you still want to disable it?"
 msgstr "Möchtest du es immer noch deaktivieren?"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:485
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:494
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:486
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:495
 msgid "Keep enabled"
 msgstr "Aktiviert lassen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:486
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:487
 msgid "Disable anyway"
 msgstr "Trotzdem deaktivieren"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:493
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:494
 #, python-format
 msgid "You are about to disable \"%(name)s\""
 msgstr "Du bist im Begriff \"%(name)s\" zu deaktivieren."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:495
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:496
 msgid "Disable plugin"
 msgstr "Plugin disablen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:552
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:553
 #, python-format
 msgid "Installing plugin \"%(name)s\" from %(url)s..."
 msgstr "Installiere Plugin \"%(name)s\" von %(url)s..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:554
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:555
 #, python-format
 msgid "Installing plugin from %(url)s..."
 msgstr "Installiere Plugin von %(url)s..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:557
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:558
 msgid "Reinstalling plugin..."
 msgstr "Reinstalliere Plugin..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:558
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:559
 #, python-format
 msgid "Reinstalling plugin \"%(name)s\" from %(url)s..."
 msgstr "Reinstalliere Plugin \"%(name)s\" von %(url)s..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:607
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:608
 msgid "Uninstalling plugin..."
 msgstr "Deinstalliere Plugin..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:607
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:608
 #, python-format
 msgid "Uninstalling plugin \"%(name)s\""
 msgstr "Deinstalliere Plugin \"%(name)s\""
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:627
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:628
 #, python-format
 msgid "You are about to uninstall the plugin \"%(name)s\""
 msgstr "Du bist im Begriff \"%(name)s\" zu deinstallieren."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:628
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:629
 msgid "Keep installed"
 msgstr "Installiert lassen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:630
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:631
 msgid "Uninstall"
 msgstr "Deinstallieren"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:631
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:632
 msgid "Uninstall & clean up data"
 msgstr "Deinstallieren & Daten löschen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:657
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:658
 msgid "Cleaning up plugin data..."
 msgstr "Lösche Plugindaten..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:657
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:658
 #, python-format
 msgid "Cleaning up data of plugin \"%(name)s\""
 msgstr "Lösche Daten von Plugin \"%(name)s\""
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:677
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:678
 #, python-format
 msgid "You are about to cleanup the plugin data of \"%(name)s\". This operation cannot be reversed."
 msgstr "Du bist im Begriff, die Daten des Plugins \"%(name)s\" zu löschen. Dieser Vorgang kann nicht rückgängig gemacht werden."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:678
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:710
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:679
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:711
 msgid "Keep data"
 msgstr "Daten behalten"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:679
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:680
 msgid "Cleanup data"
 msgstr "Daten löschen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:691
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:692
 msgid "Cleaning up all left over plugin data..."
 msgstr "Übergebliebene Plugindaten werden gelöscht..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:709
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:710
 msgid "You are about to cleanup left over plugin settings and data of plugins no longer installed. This operation cannot be reversed."
 msgstr "Du bist im Begriff, Daten und Einstellungen von Plugins zu löschen, die nicht mehr installiert sind. Dieser Vorgang kann nicht rückgängig gemacht werden."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:711
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:712
 msgid "Cleanup all data"
 msgstr "Alle Daten löschen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:814
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:815
 msgid "Reinstall"
 msgstr "Reinstallieren"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:814
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:815
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:271
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:287
 msgid "Install"
 msgstr "Installieren"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:814
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:815
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:71
 msgid "Disabled"
 msgstr "Deaktiviert"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:814
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:815
 msgid "Incompatible"
 msgstr "Inkompatibel"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:823
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:824
 msgid "Plugin management log"
 msgstr "Pluginmanagementlog"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:831
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:832
 #, python-format
 msgid "%(count)d earlier actions..."
 msgstr "%(count)d frühere Aktionen..."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:833
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:834
 #, python-format
 msgid "%(count)d earlier action"
 msgstr "%(count)d frühere Aktion"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:844
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:845
 #, python-format
 msgid "Install <em>%(plugin)s</em>: %(result)s"
 msgstr "<em>%(plugin)s</em> installiert: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:848
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:849
 #, python-format
 msgid "Uninstall <em>%(plugin)s</em>: %(result)s"
 msgstr "<em>%(plugin)s</em> deinstalliert: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:852
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:853
 #, python-format
 msgid "Enable <em>%(plugin)s</em>: %(result)s"
 msgstr "<em>%(plugin)s</em> aktiviert: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:856
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:857
 #, python-format
 msgid "Disable <em>%(plugin)s</em>: %(result)s"
 msgstr "<em>%(plugin)s</em> deaktiviert: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:860
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:861
 #, python-format
 msgid "Cleanup <em>%(plugin)s</em>: %(result)s"
 msgstr "Löschen der Daten von <em>%(plugin)s</em>: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:864
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:865
 #, python-format
 msgid "Cleanup all: %(result)s"
 msgstr "Alle Daten löschen: %(result)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:881
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:882
 msgid "A restart is needed for the changes to take effect."
 msgstr "Ein Neustart von OctoPrint ist notwendig, damit die Änderungen wirksam werden."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:889
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:890
 msgid "Restart now"
 msgstr "Jetzt neu starten"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:894
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:895
 msgid "<strong>This will restart your OctoPrint server.</strong></p><p>This action may disrupt any ongoing print jobs (depending on your printer's controller and general setup that might also apply to prints run directly from your printer's internal storage)."
 msgstr "<strong>Dies wird deinen OctoPrint Server neu starten</strong></p><p>Diese Aktion wird laufende Druckaufträge unterbrechen (abhängig von deinem Druckerkontroller und generellem Setup gilt das auch für Druckaufträge, die du direkt von der SD deines Druckers laufen lässt)."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:900
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:901
 msgid "Restart in progress"
 msgstr "Neustart findet statt"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:901
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:902
 msgid "The server is now being restarted in the background"
 msgstr "Der Server wird nun im Hintergrund neu gestartet"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:907
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:908
 msgid "Trying to restart the server produced an error, please check octoprint.log for details. You'll have to restart manually."
 msgstr "Beim Versuch, den Server neu zu starten, ist ein Fehler aufgetreten. Bitte konsultiere octoprint.log für Details. Du musst manuell neu starten."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:920
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:921
 msgid "A refresh is needed for the changes to take effect."
 msgstr "Ein Neuladen von OctoPrint ist notwendig, damit die Änderungen wirksam werden."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:927
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:928
 #: src/octoprint/templates/overlays/reloadui.jinja2:14
 msgid "Reload now"
 msgstr "Jetzt neu laden"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:936
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:937
 msgid "A reconnect to the printer is needed for the changes to take effect."
 msgstr "Ein Reconnect zum Drucker ist notwendig, damit die Änderungen wirksam werden."
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:973
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:974
 msgid "Error!"
 msgstr "Fehler!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:976
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:977
 msgid "Done!"
 msgstr "Fertig!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1002
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1003
 msgid "Blacklisted"
 msgstr "Geblacklistet"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1004
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1005
 msgid "Disabled due to active safe mode"
 msgstr "Deaktiviert wegen aktiviertem Safe Mode"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1006
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1007
 msgid "Enable Plugin"
 msgstr "Plugin enablen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1009
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1010
 msgid "Disable Plugin"
 msgstr "Plugin disablen"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1029
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1030
 #, python-format
 msgid "There are %(count)d notices (%(important)d marked as important) available regarding this plugin - click to show!"
 msgstr "Es gibt %(count)d Nachrichten (%(important)d als wichtig markiert) zu diesem Plugin - hier klicken um sie anzuzeigen!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1031
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1032
 #, python-format
 msgid "There are %(count)d notices available regarding this plugin - click to show!"
 msgstr "Es gibt %(count)d Nachrichten zu diesem Plugin - hier klicken um sie anzuzeigen!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1035
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1036
 msgid "There is an important notice available regarding this plugin - click to show!"
 msgstr "Es gibt eine wichtige Nachricht zu diesem Plugin - hier klicken um sie anzuzeigen!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1037
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1038
 msgid "There is a notice available regarding this plugin - click to show!"
 msgstr "Es gibt eine Nachricht zu diesem Plugin - hier klicken um sie anzuzeigen!"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1051
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1052
 #, python-format
 msgid "Important notice regarding plugin \"%(name)s\""
 msgstr "Wichtige Nachricht zu Plugin \"%(name)s\""
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1053
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1054
 #, python-format
 msgid "Notice regarding plugin \"%(name)s\""
 msgstr "Nachricht zu Plugin \"%(name)s\""
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1060
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1061
 #, python-format
 msgid "Affected versions: %(versions)s"
 msgstr "Betroffene Versionen: %(versions)s"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1062
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1063
 msgid "Affected versions: all"
 msgstr "Betroffene Versionen: alle"
 
-#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1067
+#: src/octoprint/plugins/pluginmanager/static/js/pluginmanager.js:1068
 msgid "Read more..."
 msgstr "Mehr..."
 
@@ -1653,7 +1696,7 @@ msgid "\n"
 msgstr "OctoPrint scheint zur Zeit keine Verbindung zum Internet zu haben. Daher ist es nicht möglich, neue Plugins aus dem Pluginrepository oder von URL zu installieren."
 
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:39
-#: src/octoprint/server/views.py:515
+#: src/octoprint/server/views.py:535
 msgid "Plugins"
 msgstr "Plugins"
 
@@ -1722,6 +1765,10 @@ msgstr "Mit OctoPrint gebundlet"
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:87
 msgid "Cannot be uninstalled through OctoPrint"
 msgstr "Kann nicht aus OctoPrint heraus deinstalliert werden"
+
+#: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:87
+msgid "Incompatible to OctoPrint or the underlying Python environment"
+msgstr "Inkompatibel zu OctoPrint oder der Pythonumgebung"
 
 #: src/octoprint/plugins/pluginmanager/templates/pluginmanager_settings.jinja2:87
 msgid "Restart of OctoPrint needed for changes to take effect"
@@ -1988,7 +2035,7 @@ msgid "Python"
 msgstr "Python"
 
 #: src/octoprint/plugins/softwareupdate/__init__.py:588
-#: src/octoprint/plugins/softwareupdate/__init__.py:1192
+#: src/octoprint/plugins/softwareupdate/__init__.py:1195
 msgid "pip"
 msgstr "pip"
 
@@ -1996,13 +2043,13 @@ msgstr "pip"
 msgid "setuptools"
 msgstr "setuptools"
 
-#: src/octoprint/plugins/softwareupdate/__init__.py:686
+#: src/octoprint/plugins/softwareupdate/__init__.py:689
 #: src/octoprint/plugins/softwareupdate/templates/softwareupdate_wizard.jinja2:1
 msgid "Software Update"
 msgstr "Software Update"
 
-#: src/octoprint/plugins/softwareupdate/__init__.py:1134
-#: src/octoprint/server/views.py:607
+#: src/octoprint/plugins/softwareupdate/__init__.py:1137
+#: src/octoprint/server/views.py:627
 #: src/octoprint/static/js/app/viewmodels/appearance.js:99
 #: src/octoprint/static/js/app/viewmodels/appearance.js:104
 #: src/octoprint/static/js/app/viewmodels/appearance.js:106
@@ -2012,7 +2059,7 @@ msgstr "Software Update"
 msgid "OctoPrint"
 msgstr "OctoPrint"
 
-#: src/octoprint/plugins/softwareupdate/__init__.py:1334
+#: src/octoprint/plugins/softwareupdate/__init__.py:1337
 msgid "Without this plugin OctoPrint will no longer be able to update itself or any of your installed plugins which might put your system at risk."
 msgstr "Ohne dieses Plugin wird OctoPrint nicht länger in der Lage sein, sich selbst oder deine installierten Plugins zu aktualisierten. Das könnte dein System gefährden."
 
@@ -2578,105 +2625,105 @@ msgstr "\n"
 "    Für Details, was genau getrackt wird, schau bitte auf <a href=\"https://tracking.octoprint.org\" target=\"_blank\" rel=\"noopener noreferrer\">tracking.octoprint.org</a>\n"
 "    sowie die <a href=\"https://tracking.octoprint.org/privacy\" target=\"_blank\" rel=\"noopener noreferrer\">Privacy Policy auf  tracking.octoprint.org</a>.\n"
 
-#: src/octoprint/server/views.py:574
+#: src/octoprint/server/views.py:594
 #: src/octoprint/templates/dialogs/settings/serialconnection.jinja2:12
 msgid "Connection"
 msgstr "Verbindung"
 
-#: src/octoprint/server/views.py:575
+#: src/octoprint/server/views.py:595
 #: src/octoprint/templates/sidebar/state.jinja2:1
 msgid "State"
 msgstr "Status"
 
-#: src/octoprint/server/views.py:576
+#: src/octoprint/server/views.py:596
 msgid "Files"
 msgstr "Dateien"
 
-#: src/octoprint/server/views.py:582
+#: src/octoprint/server/views.py:602
 msgid "Temperature"
 msgstr "Temperatur"
 
-#: src/octoprint/server/views.py:583
+#: src/octoprint/server/views.py:603
 msgid "Control"
 msgstr "Steuerung"
 
-#: src/octoprint/server/views.py:584
+#: src/octoprint/server/views.py:604
 msgid "GCode Viewer"
 msgstr "GCode Viewer"
 
-#: src/octoprint/server/views.py:585
+#: src/octoprint/server/views.py:605
 msgid "Terminal"
 msgstr "Terminal"
 
-#: src/octoprint/server/views.py:586
+#: src/octoprint/server/views.py:606
 #: src/octoprint/templates/sidebar/state.jinja2:9
 msgid "Timelapse"
 msgstr "Zeitraffer"
 
-#: src/octoprint/server/views.py:592
+#: src/octoprint/server/views.py:612
 msgid "Printer"
 msgstr "Drucker"
 
-#: src/octoprint/server/views.py:594
+#: src/octoprint/server/views.py:614
 msgid "Serial Connection"
 msgstr "Serielle Verbindung"
 
-#: src/octoprint/server/views.py:595
+#: src/octoprint/server/views.py:615
 #: src/octoprint/templates/dialogs/settings/printerprofiles.jinja2:1
 msgid "Printer Profiles"
 msgstr "Druckerprofile"
 
-#: src/octoprint/server/views.py:596
+#: src/octoprint/server/views.py:616
 msgid "Temperatures"
 msgstr "Temperaturen"
 
-#: src/octoprint/server/views.py:597
+#: src/octoprint/server/views.py:617
 msgid "Terminal Filters"
 msgstr "Terminalfilter"
 
-#: src/octoprint/server/views.py:598
+#: src/octoprint/server/views.py:618
 msgid "GCODE Scripts"
 msgstr "GCODE Scripts"
 
-#: src/octoprint/server/views.py:600 src/octoprint/server/views.py:602
+#: src/octoprint/server/views.py:620 src/octoprint/server/views.py:622
 msgid "Features"
 msgstr "Funktionen"
 
-#: src/octoprint/server/views.py:604
+#: src/octoprint/server/views.py:624
 msgid "GCODE Visualizer"
 msgstr "GCode Viewer"
 
-#: src/octoprint/server/views.py:605
+#: src/octoprint/server/views.py:625
 msgid "API"
 msgstr "API"
 
-#: src/octoprint/server/views.py:610
+#: src/octoprint/server/views.py:630
 #: src/octoprint/templates/dialogs/settings/folders.jinja2:2
 #: src/octoprint/templates/sidebar/files_header.jinja2:12
 msgid "Folders"
 msgstr "Verzeichnisse"
 
-#: src/octoprint/server/views.py:611
+#: src/octoprint/server/views.py:631
 msgid "Appearance"
 msgstr "Aussehen"
 
-#: src/octoprint/server/views.py:612
+#: src/octoprint/server/views.py:632
 msgid "Server"
 msgstr "Server"
 
-#: src/octoprint/server/views.py:618
+#: src/octoprint/server/views.py:638
 msgid "Access"
 msgstr "Zugriff"
 
-#: src/octoprint/server/views.py:619
+#: src/octoprint/server/views.py:639
 msgid "Interface"
 msgstr "Interface"
 
-#: src/octoprint/server/views.py:635
+#: src/octoprint/server/views.py:655
 msgid "Start"
 msgstr "Start"
 
-#: src/octoprint/server/views.py:636
+#: src/octoprint/server/views.py:656
 #: src/octoprint/templates/dialogs/wizard.jinja2:57
 msgid "Finish"
 msgstr "Beenden"
@@ -2730,98 +2777,98 @@ msgstr "Der Server scheint offline zu sein, zumindest kann ich mich nicht mit ih
 msgid "The server appears to be offline, at least I'm not getting any response from it. I <strong>could not reconnect automatically</strong>, but you may try a manual reconnect using the button below."
 msgstr "Der Server scheint offline zu sein, zumindest kann ich mich nicht mit ihm verbinden. Ich <strong>konnte mich nicht automatisch neu verbinden</strong>, aber Du kannst mittels des folgenden Buttons einen manuellen Verbindungsversuch anstoßen."
 
-#: src/octoprint/static/js/app/dataupdater.js:162
+#: src/octoprint/static/js/app/dataupdater.js:168
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: src/octoprint/static/js/app/dataupdater.js:165
+#: src/octoprint/static/js/app/dataupdater.js:171
 msgid "Command line flag"
 msgstr "Kommandozeilenflag"
 
-#: src/octoprint/static/js/app/dataupdater.js:169
+#: src/octoprint/static/js/app/dataupdater.js:175
 msgid "Setting in config.yaml"
 msgstr "Einstellung in config.yaml"
 
-#: src/octoprint/static/js/app/dataupdater.js:173
+#: src/octoprint/static/js/app/dataupdater.js:179
 msgid "Problem during last startup"
 msgstr "Problem während des letzten Starts"
 
-#: src/octoprint/static/js/app/dataupdater.js:179
+#: src/octoprint/static/js/app/dataupdater.js:185
 msgid "Safe mode is active"
 msgstr "Sicherheitsmodus ist aktiv"
 
-#: src/octoprint/static/js/app/dataupdater.js:180
+#: src/octoprint/static/js/app/dataupdater.js:186
 #, python-format
 msgid "<p>The server is currently running in safe mode. Third party plugins and language packs are disabled and cannot be enabled.</p><p>Reason: %(reason)s</p>"
 msgstr "<p>Der Server ist aktuell im Sicherheitsmodus. Third-Party-Plugins sind deaktiviert und können nicht aktiviert werden.</p><p>Grund: %(reason)s</p>"
 
-#: src/octoprint/static/js/app/dataupdater.js:229
+#: src/octoprint/static/js/app/dataupdater.js:235
 #: src/octoprint/static/js/app/viewmodels/files.js:963
 #: src/octoprint/static/js/app/viewmodels/files.js:970
 #, python-format
 msgid "Slicing ... (%(percentage)d%%)"
 msgstr "Slice ... (%(percentage)d%%)"
 
-#: src/octoprint/static/js/app/dataupdater.js:265
-#: src/octoprint/static/js/app/dataupdater.js:276
+#: src/octoprint/static/js/app/dataupdater.js:271
+#: src/octoprint/static/js/app/dataupdater.js:282
 msgid "Error reported by printer"
 msgstr "Fehler vom Drucker gemeldet"
 
-#: src/octoprint/static/js/app/dataupdater.js:266
+#: src/octoprint/static/js/app/dataupdater.js:272
 #, python-format
 msgid "Your printer's firmware reported an error. Due to that the ongoing print job will be cancelled. Reported error: %(firmwareError)s"
 msgstr "Es gab einen unbehandelten Fehler bei der Kommunikation mit dem Drucker. Daher wird der laufende Druckauftrag abgebrochen. Fehler: %(firmwareError)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:277
+#: src/octoprint/static/js/app/dataupdater.js:283
 #, python-format
 msgid "Your printer's firmware reported an error. Due to that OctoPrint will disconnect. Reported error: %(error)s"
 msgstr "Die Firmware Deines Druckers hat einen Fehler gemeldet. Darum hat OctoPrint die Verbindung geschlossen. Gemeldeter Fehler: %(error)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:283
+#: src/octoprint/static/js/app/dataupdater.js:289
 msgid "Communication error"
 msgstr "Kommunikationsfehler"
 
-#: src/octoprint/static/js/app/dataupdater.js:284
+#: src/octoprint/static/js/app/dataupdater.js:290
 #, python-format
 msgid "There was a communication error while talking to your printer. Please consult the terminal output and octoprint.log for details. Error: %(error)s"
 msgstr "Es gab einen Fehler bei der Kommunikation mit dem Drucker. Bitte konsultiere den Terminaloutput und octoprint.log für Details. Fehler: %(error)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:288
+#: src/octoprint/static/js/app/dataupdater.js:294
 msgid "Error connecting to printer"
 msgstr "Fehler bei der Verbindung zum Drucker"
 
-#: src/octoprint/static/js/app/dataupdater.js:289
+#: src/octoprint/static/js/app/dataupdater.js:295
 #, python-format
 msgid "There was an error while trying to connect to your printer. Error: %(error)s"
 msgstr "Es gab einen Fehler bei der Verbindung zum Drucker. Fehler: %(error)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:293
+#: src/octoprint/static/js/app/dataupdater.js:299
 msgid "Error starting a print"
 msgstr "Fehler beim Start eines Drucks"
 
-#: src/octoprint/static/js/app/dataupdater.js:294
+#: src/octoprint/static/js/app/dataupdater.js:300
 #, python-format
 msgid "There was an error while trying to start a print job. Error: %(error)s"
 msgstr "Es gab einen Fehler beim Start eines Drucks. Fehler: %(error)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:303
+#: src/octoprint/static/js/app/dataupdater.js:309
 msgid "Unknown error"
 msgstr "Unbekannter Fehler"
 
-#: src/octoprint/static/js/app/dataupdater.js:304
+#: src/octoprint/static/js/app/dataupdater.js:310
 #, python-format
 msgid "There was an unknown error while talking to your printer. Please consult the terminal output and octoprint.log for details. Error: %(error)s"
 msgstr "Es gab einen unbekannten Fehler bei der Kommunikation mit dem Drucker. Bitte konsultiere den Terminaloutput und octoprint.log für Details. Fehler: %(error)s"
 
-#: src/octoprint/static/js/app/dataupdater.js:324
+#: src/octoprint/static/js/app/dataupdater.js:330
 msgid "It looks like your printer reset while a connection was active. If this was intentional you may safely ignore this message. Otherwise you should investigate why your printer reset itself, since this will interrupt prints and also file transfers to your printer's SD."
 msgstr "Es sieht so als hätte sich der Drucker resettet während eine Verbindung offen war. Falls das Absicht war kannst du diese Nachricht ignorieren. Andernfalls solltest du prüfen, warum sich dein Drucker resettet hat, da dies Druckaufträge und Filetransfers zu der SD Karte deines Druckers unterbrechen wird."
 
-#: src/octoprint/static/js/app/dataupdater.js:327
+#: src/octoprint/static/js/app/dataupdater.js:333
 msgid "It looks like your printer reset while a connection was active. Due to this the ongoing job was aborted. If this was intentional you may safely ignore this message. Otherwise you should investigate why your printer reset itself, since this will interrupt prints and also file transfers to your printer's SD."
 msgstr "Es sieht so als hätte sich der Drucker resettet während eine Verbindung offen war. Darum wurde ein laufender Druckauftrag abgebrochen. Falls das Absicht war kannst du diese Nachricht ignorieren. Andernfalls solltest du prüfen, warum sich dein Drucker resettet hat, da dies Druckaufträge und Filetransfers zu der SD Karte deines Druckers unterbrechen wird."
 
-#: src/octoprint/static/js/app/dataupdater.js:335
+#: src/octoprint/static/js/app/dataupdater.js:341
 msgid "Printer reset detected"
 msgstr "Druckerreset erkannt"
 
@@ -2999,6 +3046,10 @@ msgstr "Breche ab"
 #: src/octoprint/static/js/app/main.js:219
 msgid "Finishing"
 msgstr "Beende"
+
+#: src/octoprint/static/js/app/main.js:813
+msgid "Loading OctoPrint's UI, please wait..."
+msgstr "Lade OctoPrints Userinterface, bitte warten..."
 
 #: src/octoprint/static/js/app/viewmodels/access.js:94
 #: src/octoprint/templates/snippets/settings/accesscontrol/users.jinja2:48
@@ -3842,14 +3893,6 @@ msgstr "Zeitrafferaufnahme fertig"
 #, python-format
 msgid "New timelapse %(movie_prefix)s is done rendering."
 msgstr "Neue Zeitrafferaufnahme %(movie_prefix)s wurde fertig gerendert"
-
-#: src/octoprint/static/js/app/viewmodels/uistate.js:32
-msgid "User unknown or wrong password"
-msgstr "Nutzer unbekannt oder falsches Passwort"
-
-#: src/octoprint/static/js/app/viewmodels/uistate.js:36
-msgid "Your account is deactivated"
-msgstr "Dein Account ist deaktiviert"
 
 #: src/octoprint/static/js/app/viewmodels/usersettings.js:12
 msgid "Site default"
@@ -4952,14 +4995,6 @@ msgid "\n"
 "    This wizard will guide you through the final steps to get your OctoPrint instance all set up and ready to go. We'll\n"
 "    get you printing in no time!\n"
 msgstr "Dieser Wizard wird dich nun durch die letzten Schritte begleiten, um deine OctoPrint Instanz fertig einzurichten.\n"
-
-#: src/octoprint/templates/navbar/login.jinja2:9
-msgid "Forgot password?"
-msgstr "Passwort vergessen?"
-
-#: src/octoprint/templates/navbar/login.jinja2:13
-msgid "Remember me"
-msgstr "Login merken"
 
 #: src/octoprint/templates/navbar/login.jinja2:19
 msgid "User Settings"
@@ -6918,3 +6953,12 @@ msgstr "Zeitrafferaufnahme rendern"
 #~ " statt sie wie die eines anonymen "
 #~ "/ nicht eingeloggten Users zu behandeln."
 #~ " Das war früher der Default."
+
+#~ msgid "Allows to manage settings"
+#~ msgstr "Erlaubt die Verwaltung der Einstellungen"
+
+#~ msgid "User unknown or wrong password"
+#~ msgstr "Nutzer unbekannt oder falsches Passwort"
+
+#~ msgid "Your account is deactivated"
+#~ msgstr "Dein Account ist deaktiviert"

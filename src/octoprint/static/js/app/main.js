@@ -227,6 +227,7 @@ $(function() {
         PNotify.prototype.options.stack.firstpos2 = 20;
         PNotify.prototype.options.stack.spacing1 = 20;
         PNotify.prototype.options.stack.spacing2 = 20;
+        PNotify.prototype.options.stack.context = $("#page-container-main");
         PNotify.prototype.options.delay = 5000;
         PNotify.prototype.options.animate_speed = "fast";
 
@@ -806,6 +807,10 @@ $(function() {
             .done(function() {
                 // make sure we trigger onServerConnect should we dis- and reconnect to the server
                 dataUpdater.connectCallback = onServerConnect;
+
+                // we are now connected to the server and need to change the loading message - jquery instead of
+                // binding because no bindings yet
+                $("#page-container-loading-header").html(gettext("Loading OctoPrint's UI, please wait..."));
 
                 // perform passive login first
                 onServerConnect()

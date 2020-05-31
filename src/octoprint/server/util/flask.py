@@ -11,7 +11,7 @@ import tornado.web
 import flask
 import flask.json
 import flask_login
-import flask_principal
+import octoprint.vendor.flask_principal as flask_principal
 import flask_assets
 import webassets.updater
 import webassets.utils
@@ -241,20 +241,6 @@ def fix_webassets_filtertool():
 			return MemoryHunk("")
 
 	FilterTool._wrap_cache = fixed_wrap_cache
-
-def fix_flask_login_remote_address():
-	def fixed_get_remote_addr():
-		"""Backported from https://github.com/maxcountryman/flask-login/pull/217"""
-
-		from flask import request
-		address = request.headers.get('X-Forwarded-For', request.remote_addr)
-		if address is not None:
-			# An 'X-Forwarded-For' header includes a comma separated list of the
-			# addresses, the first address being the actual remote address.
-			address = address.encode('utf-8').split(b',')[0].strip()
-		return address
-
-	flask_login._get_remote_addr = fixed_get_remote_addr
 
 def fix_flask_jsonify():
 	def fixed_jsonify(*args, **kwargs):
@@ -598,7 +584,8 @@ def passive_login():
 		elif settings().getBoolean(["accessControl", "autologinLocal"]) \
 				and settings().get(["accessControl", "autologinAs"]) is not None \
 				and settings().get(["accessControl", "localNetworks"]) is not None \
-				and not "active_logout" in flask.request.cookies:
+				and not "active_logout" in flask.request.cookies \
+				and remote_address:
 			# attempt local autologin
 			autologin_as = settings().get(["accessControl", "autologinAs"])
 			local_networks = _local_networks()

@@ -9,7 +9,7 @@ import uuid
 from octoprint.vendor.sockjs.tornado import SockJSRouter
 from flask import Flask, g, request, session, Blueprint, Request, Response, current_app
 from flask_login import LoginManager, current_user, session_protected, user_logged_out
-from flask_principal import Principal, Permission, RoleNeed, identity_loaded, identity_changed, UserNeed, Identity, AnonymousIdentity
+from octoprint.vendor.flask_principal import Principal, Permission, RoleNeed, identity_loaded, identity_changed, UserNeed, Identity, AnonymousIdentity
 from flask_babel import Babel, gettext, ngettext
 from flask_assets import Environment, Bundle
 from babel import Locale
@@ -31,9 +31,11 @@ import os
 import sys
 import logging
 import logging.config
+import mimetypes
 import atexit
 import signal
 import base64
+import re
 
 try:
 	import fcntl
@@ -98,7 +100,7 @@ import octoprint.filemanager.storage
 import octoprint.filemanager.analysis
 import octoprint.slicing
 from octoprint.server.util import loginFromApiKeyRequestHandler, corsRequestHandler, \
-	corsResponseHandler
+	corsResponseHandler, requireLoginRequestHandler
 from octoprint.server.util.flask import PreemptiveCache
 
 VERSION = __version__
@@ -123,8 +125,7 @@ def on_identity_loaded(sender, identity):
 def _clear_identity(sender):
 	# Remove session keys set by Flask-Principal
 	for key in ('identity.id', 'identity.name', 'identity.auth_type'):
-		if key in session:
-			del session[key]
+		session.pop(key, None)
 
 	# switch to anonymous identity
 	identity_changed.send(sender, identity=AnonymousIdentity())
@@ -132,8 +133,9 @@ def _clear_identity(sender):
 
 @session_protected.connect_via(app)
 def on_session_protected(sender):
-	# session was protected, that means the user is no more and we need to clear our identity
-	_clear_identity(sender)
+	# session was deleted by session protection, that means the user is no more and we need to clear our identity
+	if session.get("remember", None) == "clear":
+		_clear_identity(sender)
 
 
 @user_logged_out.connect_via(app)
@@ -147,7 +149,7 @@ def load_user(id):
 		return None
 
 	if id == "_api":
-		return users.ApiUser([groupManager.admin_group])
+		return userManager.api_user_factory()
 
 	if session and "usersession.id" in session:
 		sessionid = session["usersession.id"]
@@ -278,9 +280,11 @@ class Server(object):
 		self._setup_heartbeat_logging()
 		pluginManager = self._plugin_manager
 
-		# monkey patch some stuff
+		# monkey patch/fix some stuff
 		util.tornado.fix_json_encode()
 		util.flask.fix_flask_jsonify()
+
+		self._setup_mimetypes()
 
 		additional_translation_folders = []
 		if not safe_mode:
@@ -474,6 +478,9 @@ class Server(object):
 				class TaggedFuncsPrinter(wrapt.ObjectProxy):
 					def __getattribute__(self, attr):
 						__wrapped__ = super(TaggedFuncsPrinter, self).__getattribute__("__wrapped__")
+						if attr == "__wrapped__":
+							return __wrapped__
+
 						item = getattr(__wrapped__, attr)
 						if callable(item) \
 								and ("tags" in item.__code__.co_varnames or "kwargs" in item.__code__.co_varnames) \
@@ -1322,6 +1329,9 @@ class Server(object):
 		blueprint.before_request(loginFromApiKeyRequestHandler)
 		blueprint.after_request(corsResponseHandler)
 
+		if plugin.is_blueprint_protected():
+			blueprint.before_request(requireLoginRequestHandler)
+
 		url_prefix = "/plugin/{name}".format(name=name)
 		app.register_blueprint(blueprint, url_prefix=url_prefix)
 
@@ -1346,7 +1356,8 @@ class Server(object):
 		before_hooks = octoprint.plugin.plugin_manager().get_hooks("octoprint.server.api.before_request")
 		after_hooks = octoprint.plugin.plugin_manager().get_hooks("octoprint.server.api.after_request")
 
-		for plugin, hook in before_hooks.items():
+		for name, hook in before_hooks.items():
+			plugin = octoprint.plugin.plugin_manager().get_plugin(name)
 			for blueprint in blueprints:
 				try:
 					result = hook(plugin=plugin)
@@ -1355,9 +1366,10 @@ class Server(object):
 							blueprint.before_request(h)
 				except Exception:
 					self._logger.exception("Error processing before_request hooks from plugin {}".format(plugin),
-					                       extra=dict(plugin=plugin))
+					                       extra=dict(plugin=name))
 
-		for plugin, hook in after_hooks.items():
+		for name, hook in after_hooks.items():
+			plugin = octoprint.plugin.plugin_manager().get_plugin(name)
 			for blueprint in blueprints:
 				try:
 					result = hook(plugin=plugin)
@@ -1366,7 +1378,18 @@ class Server(object):
 							blueprint.after_request(h)
 				except Exception:
 					self._logger.exception("Error processing after_request hooks from plugin {}".format(plugin),
-					                       extra=dict(plugin=plugin))
+					                       extra=dict(plugin=name))
+
+	def _setup_mimetypes(self):
+		# Safety measures for Windows... apparently the mimetypes module takes its translation from the windows
+		# registry, and if for some weird reason that gets borked the reported MIME types can be all over the place.
+		# Since at least in Chrome that can cause hilarious issues with JS files (refusal to run them and thus a
+		# borked UI) we make sure that .js always maps to the correct application/javascript, and also throw in a
+		# .css -> text/css for good measure.
+		#
+		# See #3367
+		mimetypes.add_type("application/javascript", ".js")
+		mimetypes.add_type("text/css", ".css")
 
 	def _setup_assets(self):
 		global app
@@ -1700,8 +1723,6 @@ class Server(object):
 		assets.register("less_app", less_app_bundle)
 
 	def _setup_login_manager(self):
-		util.flask.fix_flask_login_remote_address()
-
 		global loginManager
 
 		loginManager = LoginManager()
@@ -1870,6 +1891,8 @@ class Server(object):
 
 		from octoprint.access.permissions import PluginOctoPrintPermission
 
+		key_whitelist = re.compile(r"[A-Za-z0-9_]*")
+
 		def permission_key(plugin, definition):
 			return "PLUGIN_{}_{}".format(plugin.upper(), definition["key"].upper())
 
@@ -1940,6 +1963,10 @@ class Server(object):
 						continue
 
 					if not "key" in p or not "name" in p:
+						continue
+
+					if not key_whitelist.match(p["key"]):
+						self._logger.warn("Got permission with invalid key from plugin {}: {}".format(name, p["key"]))
 						continue
 
 					if not process_regular_permission(plugin_info, p):

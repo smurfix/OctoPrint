@@ -6,57 +6,61 @@ thanks to everyone who contributed!
 
 ## Patreon Patrons
 
-  * Andre Bubel
+  * Alex Krilov
   * Andrew Moorby
-  * ANTONIO AUGUSTO DE LIMA PONTES
   * Arnljot Arntsen
+  * BigTreeTech
   * Boris Hussein
   * Brad Jackson
   * Christian Petropolis
   * Christian Wolf
-  * COLLE+McVOY
   * D Brian Kimmel
   * DeltaMaker 3D Printers
+  * Dennis Breining
   * Dorian Gray
-  * E3D BigBox
   * Eric Betts
   * Ernesto Martinez
   * Franziska Kunsmann
   * GadgetAngel
   * George Robles
+  * Greg Holloway
+  * Hog Duske
+  * Hugh Blemings
   * jean-claude migneault
   * Jeff Renfer
   * Jeremiah Avery
-  * John Robinson (JRo)
   * Joshua Wills
   * Justin Kaufman
   * Kaile Riser
   * Kale Stedman
   * Kazuhiro Ogura
+  * Kenneth Jiang
+  * Kurt Wubbels
   * Kyle Menigoz
   * LA 3D Printer Repair
   * Lee Dohm
-  * LulzBot®
   * Makespace Madrid
   * Mark Walker
   * Martin Majewski
   * Michael Aumock
   * Miles Flavel
   * Mosaic Manufacturing
-  * OMER MEHMET SUTAS
+  * Neil R. Goldberg
   * Patrick Glyré
   * Patrick McGinnis
   * Prof Yuh Wen Chen
   * Randy C. Will
   * Ranjib Dey
+  * Richard Michaud
+  * Rigid3D
   * Robert Gusek
-  * Samer Najia
-  * Shawn Lewis
+  * Ronald Griehsler
+  * Sacha Telgenhof
   * Simon Hallam
   * Stefan Krister
+  * Steve Thompson
   * Sven Mueller
   * Trent Shumay
   * Ulrich Kempken
-  * Vladislav Kuzemchik
 
-and 1653 more wonderful people pledging on the [Patreon campaign](https://patreon.com/foosel) or via [Github Sponsors](https://github.com/users/foosel/sponsorship)!
+and 1741 more wonderful people pledging on the [Patreon campaign](https://patreon.com/foosel) or via [Github Sponsors](https://github.com/users/foosel/sponsorship)!

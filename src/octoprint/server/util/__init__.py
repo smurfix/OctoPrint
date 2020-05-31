@@ -12,14 +12,13 @@ PY3 = sys.version_info[0] == 3
 from octoprint.settings import settings
 import octoprint.timelapse
 import octoprint.server
-from octoprint.access.users import ApiUser
 
-from octoprint.util import deprecated
+from octoprint.util import deprecated, to_unicode
 from octoprint.plugin import plugin_manager
 
 import flask as _flask
 import flask_login
-import flask_principal
+import octoprint.vendor.flask_principal as flask_principal
 import logging
 
 from . import flask
@@ -103,6 +102,18 @@ def loginUser(user, remember=False):
 	return False
 
 
+def requireLoginRequestHandler():
+	if _flask.request.endpoint.endswith(".static"):
+		return
+
+	if not (octoprint.server.userManager.enabled and octoprint.server.userManager.has_been_customized()):
+		return
+
+	user = flask_login.current_user
+	if user is None or user.is_anonymous or not user.is_active:
+		return flask.make_response("Forbidden", 403)
+
+
 def corsRequestHandler():
 	"""
 	``before_request`` handler for blueprints which sets CORS headers for OPTIONS requests if enabled
@@ -180,7 +191,7 @@ def get_user_for_apikey(apikey):
 	if apikey is not None:
 		if apikey == settings().get(["api", "key"]):
 			# master key was used
-			return ApiUser([octoprint.server.groupManager.admin_group])
+			return octoprint.server.userManager.api_user_factory()
 
 		if octoprint.server.userManager.enabled:
 			user = octoprint.server.userManager.find_user(apikey=apikey)
@@ -234,7 +245,7 @@ def get_user_for_authorization_header(header):
 
 	header = header.replace('Basic ', '', 1)
 	try:
-		header = base64.b64decode(header)
+		header = to_unicode(base64.b64decode(header))
 	except TypeError:
 		return None
 
@@ -242,9 +253,9 @@ def get_user_for_authorization_header(header):
 	if not octoprint.server.userManager.enabled:
 		return None
 
-	user = octoprint.server.userManager.findUser(userid=name)
+	user = octoprint.server.userManager.find_user(userid=name)
 	if settings().getBoolean(["accessControl", "checkBasicAuthenticationPassword"]) \
-			and not octoprint.server.userManager.checkPassword(name, password):
+			and not octoprint.server.userManager.check_password(name, password):
 		# password check enabled and password don't match
 		return None
 
