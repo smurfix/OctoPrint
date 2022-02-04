@@ -19,8 +19,6 @@ Bundled Plugins
    firmware_check.rst
    gcodeviewer.rst
    logging.rst
-   loginui.rst
    pluginmanager.rst
-   printer_safety_check.rst
    softwareupdate.rst
    virtual_printer.rst

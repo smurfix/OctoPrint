@@ -10,6 +10,7 @@ you can just create it - it will only get created by OctoPrint once you save set
 settings.
 
 Note that many of these settings are available from the "Settings" menu in OctoPrint itself.
+They can also be configured via :ref:`config command line interface <sec-configuration-cli>`.
 
 .. contents::
 
@@ -23,16 +24,13 @@ Use the following settings to enable access control:
 .. code-block:: yaml
 
    accessControl:
-     # whether to enable access control or not. Defaults to true
-     enabled: true
-
      # The user manager implementation to use for accessing user information. Currently only a filebased
      # user manager is implemented which stores configured accounts in a YAML file (Default: users.yaml
      # in the default configuration folder, see below)
      userManager: octoprint.access.users.FilebasedUserManager
 
      # The YAML user file to use. If left out defaults to users.yaml in the default configuration folder.
-     userFile: /path/to/users.yaml
+     userfile: /path/to/users.yaml
 
      # If set to true, will automatically log on clients originating from any of the networks defined in
      # "localNetworks" as the user defined in "autologinAs". Defaults to false.
@@ -126,6 +124,10 @@ appearance or to modify the order and presence of the various UI components:
      # Makes the color of the navigation bar "transparent". In case your printer uses
      # acrylic for its frame ;)
      colorTransparent: false
+
+     # Show the internal filename in the files sidebar, if necessary
+     # UI change only
+     showInternalFilename: true
 
      # Configures the order and availability of the UI components
      components:
@@ -706,6 +708,11 @@ Use the following settings to configure the serial connection to the printer:
      - M0
      - M1
 
+     # Commands which should not be sent to the printer and just silently ignored.
+     # An example of when you may wish to use this could be useful if you wish to manually change a filament on M600, 
+     # by using that as a Pausing command (below)
+     ignoredCommands:
+
      # Commands which should cause OctoPrint to pause any ongoing prints.
      pausingCommands:
      - M0
@@ -805,6 +812,9 @@ Use the following settings to configure the serial connection to the printer:
      # the response skips on the ok)
      triggerOkForM29: true
 
+     # Percentage of resend requests among all sent lines that should be considered critical
+     resendRatioThreshold: 10
+
      capabilities:
 
        # Whether to enable temperature autoreport in the firmware if its support is detected
@@ -899,9 +909,9 @@ Use the following settings to configure the server:
 
      # Settings for further configuration of the cookies that OctoPrint sets (login, remember me, ...)
      cookies:
-       # SameSite setting to use on the cookies. Possible values are None, Lax and Strict. Defaults to None but
-       # be advised that browsers will soon force this to Lax unless also being set as Secure and served over
-       # https, which will cause issues with embedding OctoPrint in frames.
+       # SameSite setting to use on the cookies. Possible values are None, Lax and Strict. Defaults to not set but
+       # be advised that many browsers now default to Lax unless set as Secure, explicitly setting the cookie type
+       # here and served over https, which causes issues with embedding OctoPrint in frames.
        #
        # See also https://www.chromestatus.com/feature/5088147346030592,
        # https://www.chromestatus.com/feature/5633521622188032 and issue #3482
@@ -943,6 +953,12 @@ Use the following settings to configure the server:
 
        # Command to shut down the system OctoPrint is running on, defaults to being unset
        systemShutdownCommand: sudo shutdown -h now
+
+       # pip command associated with OctoPrint, used for installing plugins and updates,
+       # if unset (default) the command will be autodetected based on the current python
+       # executable - unless you have a really special setup this is the right way to do
+       # it and there should be no need to ever even touch this setting
+       localPipCommand: None
 
      # Configuration of the regular online connectivity check
      onlineCheck:
@@ -1121,11 +1137,13 @@ Use `Javascript regular expressions <https://developer.mozilla.org/en/docs/Web/J
    # A list of filters to display in the terminal tab. Defaults to the filters shown below
    terminalFilters:
    - name: Suppress temperature messages
-     regex: '(Send: (N\d+\s+)?M105)|(Recv:\s+(ok\s+)?.*(B|T\d*):\d+)'
+     regex: '(Send: (N\d+\s+)?M105)|(Recv:\s+(ok\s+([PBN]\d+\s+)*)?([BCLPR]|T\d*):-?\d+)'
    - name: Suppress SD status messages
-     regex: '(Send: (N\d+\s+)?M27)|(Recv: SD printing byte)'
+     regex: '(Send: (N\d+\s+)?M27)|(Recv: SD printing byte)|(Recv: Not SD printing)'
    - name: Suppress wait responses
      regex: 'Recv: wait'
+   - name: Suppress processing responses
+     regex: 'Recv: (echo:\s*)?busy:\s*processing'
 
 .. _sec-configuration-config_yaml-webcam:
 

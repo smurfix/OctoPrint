@@ -2,9 +2,9 @@ name: Build
 on:
   push:
   pull_request:
-    types: [opened, sychronize, reopened]
   release:
-    types: [published, prereleased]
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -30,11 +30,27 @@ jobs:
           name: dist
           path: dist
 
+  pre-commit:
+    name: 🧹 Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: 🏗 Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: 🏗 Set up dev dependencies
+        run: |
+          pip install -e .[develop]
+      - name: 🚀 Run pre-commit
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
   test-unit:
     name: 🧪 Unit tests
     strategy:
       matrix:
-        python: ["2.7", "3.7", "3.8"]
+        python: ["2.7", "3.7", "3.8", "3.9"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -49,28 +65,12 @@ jobs:
         run: |
           pytest
 
-  test-flake8:
-    name: 🧪 Flake8
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: 🏗 Set up Python 3.7
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: 🏗 Set up test dependencies
-        run: |
-          pip install -e .[develop]
-      - name: 🚀 Run test suite
-        run: |
-          flake8 src/ tests setup.py
-
   test-install:
     name: 🧪 Installation tests
     needs: build
     strategy:
       matrix:
-        python: ["2.7", "3.7", "3.8"]
+        python: ["2.7", "3.7", "3.8", "3.9"]
         installable: ["wheel", "sdist"]
     runs-on: ubuntu-latest
     steps:
@@ -95,7 +95,7 @@ jobs:
   test-e2e:
     name: 🧪 E2E tests
     needs: build
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-latest
     steps:
       - name: ⬇ Checkout code
         uses: actions/checkout@v2
@@ -123,8 +123,8 @@ jobs:
         with:
           working-directory: tests/cypress
           browser: chrome
-          start: 'octoprint -b ${{ github.workspace }}/e2econfig serve --host 127.0.0.1 --port 5000'
-          wait-on: 'http://127.0.0.1:5000/online.txt'
+          start: "octoprint -b ${{ github.workspace }}/e2econfig serve --host 127.0.0.1 --port 5000"
+          wait-on: "http://127.0.0.1:5000/online.txt"
 
       - name: ⬆ Upload screenshots
         uses: actions/upload-artifact@v1
@@ -143,6 +143,7 @@ jobs:
     name: 📦 Publish on TestPyPI
     if: github.event_name == 'release'
     needs:
+      - pre-commit
       - test-unit
       - test-install
       - test-e2e
@@ -175,3 +176,21 @@ jobs:
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.pypi_password }}
+
+  notify-custopizer-build:
+    name: 📧 Notify OctoPi-UpToDate
+    if: github.event_name == 'release'
+    needs: publish-on-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - name: 👀 Determine version
+        run: |
+          OCTOPRINT_VERSION=$(echo $GITHUB_REF | cut -d/ -f3)
+          echo "OCTOPRINT_VERSION=$OCTOPRINT_VERSION" >> $GITHUB_ENV
+      - name: 🚀 Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPODISPATCH_TOKEN }}
+          repository: OctoPrint/OctoPi-UpToDate
+          event-type: octoprint_release
+          client-payload: '{"version": "${{ env.OCTOPRINT_VERSION }}"}'

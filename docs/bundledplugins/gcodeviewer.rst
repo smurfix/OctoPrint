@@ -3,6 +3,8 @@
 GCode Viewer Plugin
 ===================
 
+.. versionchanged:: 1.4.1
+
 The GCode Viewer plugin provides a GCode viewer based on `Alex Ustyantsev's work <https://github.com/hudbrog/gCodeViewer>`_.
 
 .. _fig-bundledplugins-gcodeviewer-example:
@@ -25,6 +27,7 @@ The plugin supports the following configuration keys:
   * ``mobileSizeThreshold``: Whether to also enable tracking on unreleased OctoPrint versions (anything not stable releases
     or release candidates). Defaults to ``false``.
   * ``sizeThreshold``: Unique instance identifier, auto generated on first activation
+  * ``skipUntilThis``: If this string is provided the GCode Viewer will search for this string, and if found, skip all gcode up until this string. This can be used to skip prime nozzle gcode in the preview
 
 .. _sec-bundledplugins-gcodeviewer-sourcecode:
 

@@ -5,9 +5,8 @@
  * To change this template use File | Settings | File Templates.
  */
 
-
-GCODE.renderer = (function(){
-// ***** PRIVATE ******
+GCODE.renderer = (function () {
+    // ***** PRIVATE ******
     var canvas;
     var ctx;
 
@@ -15,12 +14,14 @@ GCODE.renderer = (function(){
     var lineWidthFactor = 1 / 2.8;
 
     var zoomFactorDelta = 0.4;
-    var gridStep=10;
+    var gridStep = 10;
     var ctxHeight, ctxWidth;
-    var prevX=0, prevY=0;
+    var prevX = 0,
+        prevY = 0;
     var pixelRatio = window.devicePixelRatio || 1;
 
-    var layerNumStore, progressStore={from: 0, to: -1};
+    var layerNumStore,
+        progressStore = {from: 0, to: -1};
     var lastX, lastY;
     var dragStart;
     var scaleFactor = 1.1;
@@ -36,6 +37,7 @@ GCODE.renderer = (function(){
         colorRetract: "#ff0000",
         colorRestart: "#0000ff",
         colorHead: "#00ff00",
+        colorSegmentStart: "#666666",
 
         showMoves: true,
         showRetracts: true,
@@ -49,8 +51,13 @@ GCODE.renderer = (function(){
         showCurrentLayer: false,
         showPreviousLayer: false,
         showBoundingBox: false,
+        showLayerBoundingBox: false,
         showFullSize: false,
         showHead: false,
+        showSegmentStarts: false,
+        sizeSegmentStart: 2 * pixelRatio,
+        showDebugArcs: false,
+        chromeArcFix: false,
 
         moveModel: true,
         zoomInOnModel: false,
@@ -65,16 +72,32 @@ GCODE.renderer = (function(){
 
         onViewportChange: undefined,
         onDragStart: undefined, // Cancellable (return false)
-        onDrag: undefined,      // Cancellable (return false)
+        onDrag: undefined, // Cancellable (return false)
         onDragStop: undefined
     };
 
-    var offsetModelX = 0, offsetModelY = 0;
-    var offsetBedX = 0, offsetBedY = 0;
-    var scaleX = 1, scaleY = 1;
+    // offset due to dragging
+    var offsetModelX = 0,
+        offsetModelY = 0;
+
+    // TODO: remove in 1.7.0
+    var offsetBedX = 0,
+        offsetBedY = 0;
+
+    // scale due to zooming
+    var scaleX = 1,
+        scaleY = 1;
+
     var speeds = [];
     var speedsByLayer = {};
-    var currentInvertX = false, currentInvertY = false;
+    var currentInvertX = false,
+        currentInvertY = false;
+
+    var deg0 = 0.0;
+    var deg90 = Math.PI / 2.0;
+    var deg180 = Math.PI;
+    var deg270 = Math.PI * 1.5;
+    var deg360 = Math.PI * 2.0;
 
     function notifyIfViewportChanged() {
         if (viewportChanged) {
@@ -84,30 +107,56 @@ GCODE.renderer = (function(){
             viewportChanged = false;
         }
     }
-    
-    var reRender = function(){
+
+    var reRender = function () {
         if (!model) return;
 
-        log.debug("Rerendering layer " + layerNumStore + " of " + model.length + " with " + GCODE.renderer.getLayerNumSegments(layerNumStore) + " segments");
+        log.debug(
+            "Rerendering layer " +
+                layerNumStore +
+                " of " +
+                model.length +
+                " with " +
+                GCODE.renderer.getLayerNumSegments(layerNumStore) +
+                " segments"
+        );
+
+        applyOffsets(layerNumStore);
+        applyZoom(layerNumStore);
 
         notifyIfViewportChanged();
 
-        var p1 = ctx.transformedPoint(0,0);
-        var p2 = ctx.transformedPoint(canvas.width,canvas.height);
-        ctx.clearRect(p1.x,p1.y,p2.x-p1.x,p2.y-p1.y);
+        var p1 = ctx.transformedPoint(0, 0);
+        var p2 = ctx.transformedPoint(canvas.width, canvas.height);
+        ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
 
         drawGrid();
-        drawBoundingBox();
+        drawBoundingBox(layerNumStore);
         if (model && model.length) {
             if (layerNumStore < model.length) {
-                if (renderOptions['showNextLayer'] && layerNumStore < model.length - 1) {
-                    drawLayer(layerNumStore + 1, 0, GCODE.renderer.getLayerNumSegments(layerNumStore + 1), true);
+                if (renderOptions["showNextLayer"] && layerNumStore < model.length - 1) {
+                    drawLayer(
+                        layerNumStore + 1,
+                        0,
+                        GCODE.renderer.getLayerNumSegments(layerNumStore + 1),
+                        true
+                    );
                 }
-                if (renderOptions['showCurrentLayer'] && layerNumStore < model.length) {
-                    drawLayer(layerNumStore, 0, GCODE.renderer.getLayerNumSegments(layerNumStore), true);
+                if (renderOptions["showCurrentLayer"] && layerNumStore < model.length) {
+                    drawLayer(
+                        layerNumStore,
+                        0,
+                        GCODE.renderer.getLayerNumSegments(layerNumStore),
+                        true
+                    );
                 }
-                if (renderOptions['showPreviousLayer'] && layerNumStore > 0) {
-                    drawLayer(layerNumStore - 1, 0, GCODE.renderer.getLayerNumSegments(layerNumStore - 1), true);
+                if (renderOptions["showPreviousLayer"] && layerNumStore > 0) {
+                    drawLayer(
+                        layerNumStore - 1,
+                        0,
+                        GCODE.renderer.getLayerNumSegments(layerNumStore - 1),
+                        true
+                    );
                 }
                 drawLayer(layerNumStore, progressStore.from, progressStore.to);
             } else {
@@ -116,52 +165,171 @@ GCODE.renderer = (function(){
         }
     };
 
-    function trackTransforms(ctx){
-        var svg = document.createElementNS("http://www.w3.org/2000/svg",'svg');
+    function getLayerBounds(layer) {
+        if (!model || !model[layer]) return;
+
+        var cmds = model[layer];
+        var firstExtrusion;
+        var i;
+
+        // find bounds based on x/y moves with extrusion only
+        // if you want to change that criterion, this is the place to do it
+        var factorIn = function (cmd) {
+            return cmd && cmd.extrude && (cmd.x !== undefined || cmd.y !== undefined);
+        };
+
+        for (i = 0; i < cmds.length; i++) {
+            if (factorIn(cmds[i])) break;
+        }
+
+        if (i === cmds.length) return;
+        firstExtrusion = i;
+
+        // initialize with guaranteed defined values and cut out a bunch of
+        // testing for undefined cases
+        var minX = cmds[firstExtrusion].prevX,
+            maxX = cmds[firstExtrusion].prevX,
+            minY = cmds[firstExtrusion].prevY,
+            maxY = cmds[firstExtrusion].prevY;
+
+        for (i = firstExtrusion; i < cmds.length; i++) {
+            if (factorIn(cmds[i])) {
+                minX = Math.min(minX, cmds[i].prevX);
+                maxX = Math.max(maxX, cmds[i].prevX);
+                if (cmds[i].x !== undefined) {
+                    minX = Math.min(minX, cmds[i].x);
+                    maxX = Math.max(maxX, cmds[i].x);
+                }
+                minY = Math.min(minY, cmds[i].prevY);
+                maxY = Math.max(maxY, cmds[i].prevY);
+                if (cmds[i].y !== undefined) {
+                    minY = Math.min(minY, cmds[i].y);
+                    maxY = Math.max(maxY, cmds[i].y);
+                }
+                if (!!cmds[i].direction) {
+                    var dir = cmds[i].direction;
+                    var arc = getArcParams(cmds[i]);
+
+                    var startAngle, endAngle;
+                    if (dir < 0) {
+                        // cw: start = start and end = end
+                        startAngle = arc.startAngle;
+                        endAngle = arc.endAngle;
+                    } else {
+                        // ccw: start = end and end = start for clockwise
+                        startAngle = arc.endAngle;
+                        endAngle = arc.startAngle;
+                    }
+
+                    if (startAngle < 0) startAngle += deg360;
+                    if (endAngle < 0) endAngle += deg360;
+
+                    // from now on we only think in clockwise direction
+                    var intersectsAngle = function (sA, eA, angle) {
+                        return (
+                            (sA >= angle && (eA <= angle || eA > sA)) ||
+                            (sA <= angle && eA <= angle && eA > sA)
+                        );
+                    };
+
+                    if (intersectsAngle(startAngle, endAngle, deg0)) {
+                        // arc crosses positive x
+                        maxX = Math.max(maxX, arc.x + arc.r);
+                    }
+
+                    if (intersectsAngle(startAngle, endAngle, deg90)) {
+                        // arc crosses positive y
+                        maxY = Math.max(maxY, arc.y + arc.r);
+                    }
+
+                    if (intersectsAngle(startAngle, endAngle, deg180)) {
+                        // arc crosses negative x
+                        minX = Math.min(minX, arc.x - arc.r);
+                    }
+
+                    if (intersectsAngle(startAngle, endAngle, deg270)) {
+                        // arc crosses negative y
+                        minY = Math.min(minY, arc.y - arc.r);
+                    }
+                }
+            }
+        }
+
+        return {minX: minX, maxX: maxX, minY: minY, maxY: maxY};
+    }
+
+    function getArcParams(cmd) {
+        var x = cmd.x !== undefined ? cmd.x : cmd.prevX;
+        var y = cmd.y !== undefined ? cmd.y : cmd.prevY;
+
+        var centerX = cmd.prevX + cmd.i;
+        var centerY = cmd.prevY + cmd.j;
+        return {
+            x: centerX,
+            y: centerY,
+            r: Math.sqrt(cmd.i * cmd.i + cmd.j * cmd.j),
+            startAngle: Math.atan2(cmd.prevY - centerY, cmd.prevX - centerX),
+            endAngle: Math.atan2(y - centerY, x - centerX),
+            startX: cmd.prevX,
+            startY: cmd.prevY,
+            endX: x,
+            endY: y
+        };
+    }
+
+    function trackTransforms(ctx) {
+        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         var xform = svg.createSVGMatrix();
-        ctx.getTransform = function(){ return xform; };
+        ctx.getTransform = function () {
+            return xform;
+        };
 
         var savedTransforms = [];
         var save = ctx.save;
-        ctx.save = function(){
-            savedTransforms.push(xform.translate(0,0));
+        ctx.save = function () {
+            savedTransforms.push(xform.translate(0, 0));
             return save.call(ctx);
         };
         var restore = ctx.restore;
-        ctx.restore = function(){
+        ctx.restore = function () {
             xform = savedTransforms.pop();
             viewportChanged = true;
             return restore.call(ctx);
         };
 
         var scale = ctx.scale;
-        ctx.scale = function(sx,sy){
-            xform = xform.scaleNonUniform(sx,sy);
+        ctx.scale = function (sx, sy) {
+            xform = xform.scaleNonUniform(sx, sy);
             viewportChanged = true;
-            return scale.call(ctx,sx,sy);
+            return scale.call(ctx, sx, sy);
         };
         var rotate = ctx.rotate;
-        ctx.rotate = function(radians){
-            xform = xform.rotate(radians*180/Math.PI);
+        ctx.rotate = function (radians) {
+            xform = xform.rotate((radians * 180) / Math.PI);
             viewportChanged = true;
-            return rotate.call(ctx,radians);
+            return rotate.call(ctx, radians);
         };
         var translate = ctx.translate;
-        ctx.translate = function(dx,dy){
-            xform = xform.translate(dx,dy);
+        ctx.translate = function (dx, dy) {
+            xform = xform.translate(dx, dy);
             viewportChanged = true;
-            return translate.call(ctx,dx,dy);
+            return translate.call(ctx, dx, dy);
         };
         var transform = ctx.transform;
-        ctx.transform = function(a,b,c,d,e,f){
+        ctx.transform = function (a, b, c, d, e, f) {
             var m2 = svg.createSVGMatrix();
-            m2.a=a; m2.b=b; m2.c=c; m2.d=d; m2.e=e; m2.f=f;
+            m2.a = a;
+            m2.b = b;
+            m2.c = c;
+            m2.d = d;
+            m2.e = e;
+            m2.f = f;
             xform = xform.multiply(m2);
             viewportChanged = true;
-            return transform.call(ctx,a,b,c,d,e,f);
+            return transform.call(ctx, a, b, c, d, e, f);
         };
         var setTransform = ctx.setTransform;
-        ctx.setTransform = function(a,b,c,d,e,f){
+        ctx.setTransform = function (a, b, c, d, e, f) {
             xform.a = a;
             xform.b = b;
             xform.c = c;
@@ -169,109 +337,193 @@ GCODE.renderer = (function(){
             xform.e = e;
             xform.f = f;
             viewportChanged = true;
-            return setTransform.call(ctx,a,b,c,d,e,f);
+            return setTransform.call(ctx, a, b, c, d, e, f);
         };
-        var pt  = svg.createSVGPoint();
-        ctx.transformedPoint = function(x,y){
-            pt.x=x; pt.y=y;
+        var pt = svg.createSVGPoint();
+        ctx.transformedPoint = function (x, y) {
+            pt.x = x;
+            pt.y = y;
             return pt.matrixTransform(xform.inverse());
-        }
+        };
     }
 
+    // replace arc for chrome, code from https://stackoverflow.com/a/11689752
+    var bezierArc = function (x, y, radius, startAngle, endAngle, anticlockwise) {
+        // Signed length of curve
+        var signedLength;
+        var tau = 2 * Math.PI;
 
-    var  startCanvas = function() {
+        if (!anticlockwise && endAngle - startAngle >= tau) {
+            signedLength = tau;
+        } else if (anticlockwise && startAngle - endAngle >= tau) {
+            signedLength = -tau;
+        } else {
+            var delta = endAngle - startAngle;
+            signedLength = delta - tau * Math.floor(delta / tau);
+
+            // If very close to a full number of revolutions, make it full
+            if (Math.abs(delta) > 1e-12 && signedLength < 1e-12) signedLength = tau;
+
+            // Adjust if anti-clockwise
+            if (anticlockwise && signedLength > 0) signedLength = signedLength - tau;
+        }
+
+        // Minimum number of curves; 1 per quadrant.
+        var minCurves = Math.ceil(Math.abs(signedLength) / (Math.PI / 2));
+
+        // Number of curves; square-root of radius (or minimum)
+        var numCurves = Math.ceil(Math.max(minCurves, Math.sqrt(radius)));
+
+        // "Radius" of control points to ensure that the middle point
+        // of the curve is exactly on the circle radius.
+        var cpRadius = radius * (2 - Math.cos(signedLength / (numCurves * 2)));
+
+        // Angle step per curve
+        var step = signedLength / numCurves;
+
+        // Draw the circle
+        this.lineTo(x + radius * Math.cos(startAngle), y + radius * Math.sin(startAngle));
+        for (
+            var i = 0, a = startAngle + step, a2 = startAngle + step / 2;
+            i < numCurves;
+            ++i, a += step, a2 += step
+        )
+            this.quadraticCurveTo(
+                x + cpRadius * Math.cos(a2),
+                y + cpRadius * Math.sin(a2),
+                x + radius * Math.cos(a),
+                y + radius * Math.sin(a)
+            );
+    };
+
+    var applyContextPatches = function () {
+        if (!ctx.origArc) ctx.origArc = ctx.arc;
+        ctx.circle = function (x, y, r) {
+            ctx.origArc(x, y, r, 0, 2 * Math.PI, true);
+        };
+
+        if (navigator.userAgent.toLowerCase().indexOf("chrome") > -1) {
+            if (renderOptions["chromeArcFix"]) {
+                ctx.arc = bezierArc;
+                log.info("Chrome Arc Fix enabled");
+            } else {
+                ctx.arc = ctx.origArc;
+                log.info("Chrome Arc Fix disabled");
+            }
+        }
+    };
+
+    var startCanvas = function () {
         var jqueryCanvas = $(renderOptions["container"]);
         //jqueryCanvas.css("background-color", renderOptions["bgColorOffGrid"]);
         canvas = jqueryCanvas[0];
 
-        ctx = canvas.getContext('2d');
+        ctx = canvas.getContext("2d");
+        applyContextPatches();
+
         canvas.style.height = canvas.height + "px";
         canvas.style.width = canvas.width + "px";
         canvas.height = canvas.height * pixelRatio;
         canvas.width = canvas.width * pixelRatio;
         ctxHeight = canvas.height;
         ctxWidth = canvas.width;
-        lastX = ctxWidth/2;
-        lastY = ctxHeight/2;
+        lastX = ctxWidth / 2;
+        lastY = ctxHeight / 2;
         ctx.lineWidth = 2 * lineWidthFactor;
-        ctx.lineCap = 'round';
+        ctx.lineCap = "round";
         trackTransforms(ctx);
 
-        ctx.scale(1,-1); // Invert y-axis
-
         // dragging => translating
-        canvas.addEventListener('mousedown', function(event){
-            document.body.style.mozUserSelect = document.body.style.webkitUserSelect = document.body.style.userSelect = 'none';
+        canvas.addEventListener(
+            "mousedown",
+            function (event) {
+                document.body.style.mozUserSelect = document.body.style.webkitUserSelect = document.body.style.userSelect =
+                    "none";
 
-            // remember starting point of dragging gesture
-            lastX = (event.offsetX || (event.pageX - canvas.offsetLeft)) * pixelRatio;
-            lastY = (event.offsetY || (event.pageY - canvas.offsetTop)) * pixelRatio;
+                // remember starting point of dragging gesture
+                lastX = (event.offsetX || event.pageX - canvas.offsetLeft) * pixelRatio;
+                lastY = (event.offsetY || event.pageY - canvas.offsetTop) * pixelRatio;
 
-            var pt = ctx.transformedPoint(lastX, lastY);
-            if (!renderOptions["onDragStart"] || (renderOptions["onDragStart"](pt) !== false))
-              dragStart = pt;
-        }, false);
+                var pt = ctx.transformedPoint(lastX, lastY);
+                if (
+                    !renderOptions["onDragStart"] ||
+                    renderOptions["onDragStart"](pt) !== false
+                )
+                    dragStart = pt;
+            },
+            false
+        );
 
-        canvas.addEventListener('mousemove', function(event){
-            // save current mouse coordinates
-            lastX = (event.offsetX || (event.pageX - canvas.offsetLeft)) * pixelRatio;
-            lastY = (event.offsetY || (event.pageY - canvas.offsetTop)) * pixelRatio;
+        canvas.addEventListener(
+            "mousemove",
+            function (event) {
+                // save current mouse coordinates
+                lastX = (event.offsetX || event.pageX - canvas.offsetLeft) * pixelRatio;
+                lastY = (event.offsetY || event.pageY - canvas.offsetTop) * pixelRatio;
 
-            // mouse movement => dragged
-            if (dragStart !== undefined) {
-                // translate
-                var pt = ctx.transformedPoint(lastX,lastY);
+                // mouse movement => dragged
+                if (dragStart !== undefined) {
+                    // translate
+                    var pt = ctx.transformedPoint(lastX, lastY);
 
-                if (renderOptions["onDrag"] && (renderOptions["onDrag"](pt) === false))
-                    return;
+                    if (renderOptions["onDrag"] && renderOptions["onDrag"](pt) === false)
+                        return;
 
-                ctx.translate(pt.x - dragStart.x, pt.y - dragStart.y);
-                reRender();
+                    ctx.translate(pt.x - dragStart.x, pt.y - dragStart.y);
+                    reRender();
 
-                renderOptions["centerViewport"] = false;
-                renderOptions["zoomInOnModel"] = false;
-                renderOptions["zoomInOnBed"] = false;
-                offsetModelX = 0;
-                offsetModelY = 0;
-                offsetBedX = 0;
-                offsetBedY = 0;
-                scaleX = 1;
-                scaleY = 1;
+                    renderOptions["centerViewport"] = false;
+                    renderOptions["zoomInOnModel"] = false;
+                    renderOptions["zoomInOnBed"] = false;
+                    offsetModelX = 0;
+                    offsetModelY = 0;
+                    offsetBedX = 0;
+                    offsetBedY = 0;
+                    scaleX = 1;
+                    scaleY = 1;
 
-                if (renderOptions["onInternalOptionChange"] !== undefined) {
-                    renderOptions["onInternalOptionChange"]({
-                        centerViewport: false,
-                        moveModel: false,
-                        zoomInOnModel: false,
-                        zoomInOnBed: false
-                    });
+                    if (renderOptions["onInternalOptionChange"] !== undefined) {
+                        renderOptions["onInternalOptionChange"]({
+                            centerViewport: false,
+                            moveModel: false,
+                            zoomInOnModel: false,
+                            zoomInOnBed: false
+                        });
+                    }
                 }
-            }
-        }, false);
+            },
+            false
+        );
 
-        canvas.addEventListener('mouseup', function(event){
-            // reset dragStart
-            dragStart = undefined;
+        canvas.addEventListener(
+            "mouseup",
+            function (event) {
+                // reset dragStart
+                dragStart = undefined;
 
-            if (renderOptions["onDragStop"]) {
-                var x = (event.offsetX || (event.pageX - canvas.offsetLeft)) * pixelRatio;
-                var y = (event.offsetY || (event.pageY - canvas.offsetTop)) * pixelRatio;
-                renderOptions["onDragStop"](ctx.transformedPoint(x,y));
-            }
-        }, false);
+                if (renderOptions["onDragStop"]) {
+                    var x =
+                        (event.offsetX || event.pageX - canvas.offsetLeft) * pixelRatio;
+                    var y =
+                        (event.offsetY || event.pageY - canvas.offsetTop) * pixelRatio;
+                    renderOptions["onDragStop"](ctx.transformedPoint(x, y));
+                }
+            },
+            false
+        );
 
         // mouse wheel => zooming
-        var zoom = function(clicks){
+        var zoom = function (clicks) {
             // focus on last mouse position prior to zoom
             var pt = ctx.transformedPoint(lastX, lastY);
-            ctx.translate(pt.x,pt.y);
+            ctx.translate(pt.x, pt.y);
 
             // determine zooming factor and perform zoom
-            var factor = Math.pow(scaleFactor,clicks);
-            ctx.scale(factor,factor);
+            var factor = Math.pow(scaleFactor, clicks);
+            ctx.scale(factor, factor);
 
             // return to old position
-            ctx.translate(-pt.x,-pt.y);
+            ctx.translate(-pt.x, -pt.y);
 
             // render
             reRender();
@@ -293,7 +545,7 @@ GCODE.renderer = (function(){
                 });
             }
         };
-        var handleScroll = function(event){
+        var handleScroll = function (event) {
             var delta;
 
             // determine zoom direction & delta
@@ -306,13 +558,13 @@ GCODE.renderer = (function(){
 
             return event.preventDefault() && false;
         };
-        canvas.addEventListener('DOMMouseScroll',handleScroll,false);
-        canvas.addEventListener('mousewheel',handleScroll,false);
+        canvas.addEventListener("DOMMouseScroll", handleScroll, false);
+        canvas.addEventListener("mousewheel", handleScroll, false);
     };
 
-    var drawGrid = function() {
+    var drawGrid = function () {
         ctx.translate(offsetBedX, offsetBedY);
-        if(renderOptions["bed"]["circular"]) {
+        if (renderOptions["bed"]["circular"]) {
             drawCircularGrid();
         } else {
             drawRectangularGrid();
@@ -320,7 +572,7 @@ GCODE.renderer = (function(){
         ctx.translate(-offsetBedX, -offsetBedY);
     };
 
-    var drawRectangularGrid = function() {
+    var drawRectangularGrid = function () {
         var x, y;
         var width = renderOptions["bed"]["x"];
         var height = renderOptions["bed"]["y"];
@@ -362,7 +614,7 @@ GCODE.renderer = (function(){
 
         // draw origin
         ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2, true);
+        ctx.circle(0, 0, 2);
         ctx.stroke();
 
         ctx.strokeStyle = renderOptions["colorGrid"];
@@ -394,7 +646,7 @@ GCODE.renderer = (function(){
         ctx.stroke();
     };
 
-    var drawCircularGrid = function() {
+    var drawCircularGrid = function () {
         var i;
 
         ctx.strokeStyle = renderOptions["colorGrid"];
@@ -406,7 +658,7 @@ GCODE.renderer = (function(){
 
         // outline
         var r = renderOptions["bed"]["r"];
-        ctx.arc(0, 0, r, 0, Math.PI * 2, true);
+        ctx.circle(0, 0, r);
 
         // origin
         ctx.moveTo(-1 * r, 0);
@@ -420,7 +672,7 @@ GCODE.renderer = (function(){
 
         // draw origin
         ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2, true);
+        ctx.circle(0, 0, 2);
         ctx.stroke();
 
         ctx.strokeStyle = renderOptions["colorGrid"];
@@ -430,7 +682,7 @@ GCODE.renderer = (function(){
         ctx.beginPath();
         for (i = 0; i <= r; i += gridStep) {
             var x = i;
-            var y = Math.sqrt(r*r - x*x);
+            var y = Math.sqrt(r * r - x * x);
 
             ctx.moveTo(x, -1 * y);
             ctx.lineTo(x, y);
@@ -447,24 +699,27 @@ GCODE.renderer = (function(){
         ctx.stroke();
     };
 
-    var drawBoundingBox = function() {
+    var drawBoundingBox = function (layerNum) {
         if (!modelInfo) return;
 
         var minX, minY, width, height;
+
+        var draw = function (x, y, w, h, c) {
+            ctx.beginPath();
+            ctx.strokeStyle = c;
+            ctx.setLineDash([2, 5]);
+
+            ctx.rect(x, y, w, h);
+
+            ctx.stroke();
+        };
 
         if (renderOptions["showFullSize"]) {
             minX = modelInfo.min.x;
             minY = modelInfo.min.y;
             width = modelInfo.modelSize.x;
             height = modelInfo.modelSize.y;
-
-            ctx.beginPath();
-            ctx.strokeStyle = "#0000ff";
-            ctx.setLineDash([2, 5]);
-
-            ctx.rect(minX, minY, width, height);
-
-            ctx.stroke();
+            draw(minX, minY, width, height, "#0000ff");
         }
 
         if (renderOptions["showBoundingBox"]) {
@@ -472,20 +727,24 @@ GCODE.renderer = (function(){
             minY = modelInfo.boundingBox.minY;
             width = modelInfo.boundingBox.maxX - minX;
             height = modelInfo.boundingBox.maxY - minY;
+            draw(minX, minY, width, height, "#ff0000");
+        }
 
-            ctx.beginPath();
-            ctx.strokeStyle = "#ff0000";
-            ctx.setLineDash([2, 5]);
-
-            ctx.rect(minX, minY, width, height);
-
-            ctx.stroke();
+        if (renderOptions["showLayerBoundingBox"]) {
+            var layerBounds = getLayerBounds(layerNum);
+            if (layerBounds) {
+                minX = layerBounds.minX;
+                minY = layerBounds.minY;
+                width = layerBounds.maxX - minX;
+                height = layerBounds.maxY - minY;
+                draw(minX, minY, width, height, "#00ff00");
+            }
         }
 
         ctx.setLineDash([1, 0]);
     };
 
-    var drawTriangle = function(centerX, centerY, length, up) {
+    var drawTriangle = function (centerX, centerY, length, up) {
         /*
          *             (cx,cy)
          *                *             ^
@@ -532,8 +791,46 @@ GCODE.renderer = (function(){
         ctx.lineJoin = origLineJoin;
     };
 
-    var drawLayer = function(layerNum, fromProgress, toProgress, isNotCurrentLayer){
-        log.trace("Drawing layer " + layerNum + " from " + fromProgress + " to " + toProgress + " (current: " + !isNotCurrentLayer + ")");
+    var drawCross = function (centerX, centerY, size) {
+        var x1, y1, x2, y2;
+
+        var half = size / 2;
+        x1 = centerX - half;
+        x2 = centerX + half;
+        y1 = centerY - half;
+        y2 = centerY + half;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.moveTo(x1, y2);
+        ctx.lineTo(x2, y1);
+        ctx.stroke();
+    };
+
+    var drawDebugArc = function (arc, ccw) {
+        ctx.moveTo(arc.x, arc.y);
+        ctx.lineTo(arc.startX, arc.startY);
+        ctx.moveTo(arc.x, arc.y);
+        ctx.lineTo(arc.endX, arc.endY);
+        ctx.moveTo(arc.startX, arc.startY);
+        ctx.lineTo(arc.endX, arc.endY);
+        ctx.moveTo(arc.startX, arc.startY);
+        ctx.arc(arc.x, arc.y, arc.r, arc.startAngle, arc.endAngle, ccw);
+    };
+
+    var drawLayer = function (layerNum, fromProgress, toProgress, isNotCurrentLayer) {
+        log.trace(
+            "Drawing layer " +
+                layerNum +
+                " from " +
+                fromProgress +
+                " to " +
+                toProgress +
+                " (current: " +
+                !isNotCurrentLayer +
+                ")"
+        );
 
         var i;
 
@@ -560,17 +857,15 @@ GCODE.renderer = (function(){
             // previous layer exists, use last x/y as prevX/prevY
             prevX = undefined;
             prevY = undefined;
-            var prevModelLayer = model[layerNum-1];
-            for (i = prevModelLayer.length-1; i >= 0; i--) {
+            var prevModelLayer = model[layerNum - 1];
+            for (i = prevModelLayer.length - 1; i >= 0; i--) {
                 if (prevX === undefined && prevModelLayer[i].x !== undefined) {
                     prevX = prevModelLayer[i].x;
-                    if (prevY !== undefined)
-                        break;
+                    if (prevY !== undefined) break;
                 }
                 if (prevY === undefined && prevModelLayer[i].y !== undefined) {
                     prevY = prevModelLayer[i].y;
-                    if (prevX !== undefined)
-                        break;
+                    if (prevX !== undefined) break;
                 }
             }
         }
@@ -583,15 +878,23 @@ GCODE.renderer = (function(){
         //~~ render this layer's commands
 
         var sizeRetractSpot = renderOptions["sizeRetractSpot"] * lineWidthFactor * 2;
+        var sizeSegmentStart = renderOptions["sizeSegmentStart"] * lineWidthFactor * 2;
 
         // alpha value (100% if current layer is being rendered, 30% otherwise)
         // Note - If showing currently layer as preview - also render it at 30% and draw the progress over the top at 100%
-        var alpha = (renderOptions['showNextLayer'] || renderOptions['showCurrentLayer'] || renderOptions['showPreviousLayer']) && isNotCurrentLayer ? 0.3 : 1.0;
-        
+        var alpha =
+            (renderOptions["showNextLayer"] ||
+                renderOptions["showCurrentLayer"] ||
+                renderOptions["showPreviousLayer"]) &&
+            isNotCurrentLayer
+                ? 0.3
+                : 1.0;
+
         var colorLine = {};
         var colorMove = {};
         var colorRetract = {};
         var colorRestart = {};
+        var colorSegmentStart = {};
 
         function getColorLineForTool(tool) {
             var rv = colorLine[tool];
@@ -599,7 +902,11 @@ GCODE.renderer = (function(){
                 var lineColor = renderOptions["colorLine"][tool];
                 if (lineColor === undefined) lineColor = renderOptions["colorLine"][0];
                 var shade = tool * 0.15;
-                rv = colorLine[tool] = pusher.color(lineColor).shade(shade).alpha(alpha).html();
+                rv = colorLine[tool] = pusher
+                    .color(lineColor)
+                    .shade(shade)
+                    .alpha(alpha)
+                    .html();
             }
             return rv;
         }
@@ -608,7 +915,11 @@ GCODE.renderer = (function(){
             var rv = colorMove[tool];
             if (rv === undefined) {
                 var shade = tool * 0.15;
-                rv = colorMove[tool] = pusher.color(renderOptions["colorMove"]).shade(shade).alpha(alpha).html();
+                rv = colorMove[tool] = pusher
+                    .color(renderOptions["colorMove"])
+                    .shade(shade)
+                    .alpha(alpha)
+                    .html();
             }
             return rv;
         }
@@ -617,7 +928,11 @@ GCODE.renderer = (function(){
             var rv = colorRetract[tool];
             if (rv === undefined) {
                 var shade = tool * 0.15;
-                rv = colorRetract[tool] = pusher.color(renderOptions["colorRetract"]).shade(shade).alpha(alpha).html();
+                rv = colorRetract[tool] = pusher
+                    .color(renderOptions["colorRetract"])
+                    .shade(shade)
+                    .alpha(alpha)
+                    .html();
             }
             return rv;
         }
@@ -626,23 +941,40 @@ GCODE.renderer = (function(){
             var rv = colorRestart[tool];
             if (rv === undefined) {
                 var shade = tool * 0.15;
-                rv = colorRestart[tool] = pusher.color(renderOptions["colorRestart"]).shade(shade).alpha(alpha).html();
+                rv = colorRestart[tool] = pusher
+                    .color(renderOptions["colorRestart"])
+                    .shade(shade)
+                    .alpha(alpha)
+                    .html();
+            }
+            return rv;
+        }
+
+        function getColorSegmentStartForTool(tool) {
+            var rv = colorSegmentStart[tool];
+            if (rv === undefined) {
+                var shade = tool * 0.15;
+                rv = colorSegmentStart[tool] = pusher
+                    .color(renderOptions["colorSegmentStart"])
+                    .shade(shade)
+                    .alpha(alpha)
+                    .html();
             }
             return rv;
         }
 
         var prevPathType = "fill";
         function strokePathIfNeeded(newPathType, strokeStyle) {
-            if ((newPathType != prevPathType) || (newPathType == "fill")) {
-                if (prevPathType != "fill") {
+            if (newPathType !== prevPathType || newPathType === "fill") {
+                if (prevPathType !== "fill") {
                     ctx.stroke();
                 }
                 prevPathType = newPathType;
 
                 ctx.beginPath();
-                if (newPathType != "fill") {
-                  ctx.strokeStyle = strokeStyle;
-                  ctx.moveTo(prevX, prevY);
+                if (newPathType !== "fill") {
+                    ctx.strokeStyle = strokeStyle;
+                    ctx.moveTo(prevX, prevY);
                 }
             }
         }
@@ -650,7 +982,7 @@ GCODE.renderer = (function(){
         ctx.lineJoin = "round";
 
         for (i = fromProgress; i <= toProgress; i++) {
-            if (typeof(cmds[i]) === 'undefined') continue;
+            if (typeof cmds[i] === "undefined") continue;
             var cmd = cmds[i];
 
             if (cmd.prevX !== undefined && cmd.prevY !== undefined) {
@@ -689,27 +1021,29 @@ GCODE.renderer = (function(){
                 }
 
                 strokePathIfNeeded("move", getColorMoveForTool(tool));
-                if(renderOptions["showMoves"] && !isNotCurrentLayer) {
+                if (renderOptions["showMoves"] && !isNotCurrentLayer) {
                     // move => draw line from (prevX, prevY) to (x, y) in move color
                     ctx.lineWidth = lineWidthFactor;
-                    ctx.lineTo(x,y);
+                    ctx.lineTo(x, y);
                 }
-            } else if(cmd.extrude) {
+            } else if (cmd.extrude) {
                 if (cmd.retract == 0) {
                     // no retraction => real extrusion move, use tool color to draw line
                     strokePathIfNeeded("extrude", getColorLineForTool(tool));
-                    ctx.lineWidth = renderOptions['extrusionWidth'] * lineWidthFactor;
-                    if (cmd.direction !== undefined && cmd.direction != 0){
-                        var di = cmd.i;
-                        var dj = cmd.j;
-                        var centerX = prevX+di;
-                        var centerY = prevY+dj;
-                        var startAngle = Math.atan2(prevY-centerY, prevX - centerX);
-                        var endAngle = Math.atan2(y - centerY, x - centerX);
-                        var radius=Math.sqrt(di*di+dj*dj);
-                        ctx.arc(centerX,centerY,radius,startAngle,endAngle,cmd.direction<0); // Y-axis is inverted so direction is also inverted
+                    ctx.lineWidth = renderOptions["extrusionWidth"] * lineWidthFactor;
+                    if (cmd.direction !== undefined && cmd.direction !== 0) {
+                        var arc = getArcParams(cmd);
+                        var ccw = cmd.direction < 0; // Y-axis is inverted so direction is also inverted
+
+                        if (renderOptions["showDebugArcs"] && !isNotCurrentLayer) {
+                            strokePathIfNeeded("debugarc", "#ff0000");
+                            drawDebugArc(arc, ccw);
+                            strokePathIfNeeded("extrude", getColorLineForTool(tool));
+                        }
+
+                        ctx.arc(arc.x, arc.y, arc.r, arc.startAngle, arc.endAngle, ccw);
                     } else {
-                        ctx.lineTo(x,y);
+                        ctx.lineTo(x, y);
                     }
                 } else {
                     // we were previously retracting, now we are restarting => draw dot if configured to do so
@@ -720,54 +1054,74 @@ GCODE.renderer = (function(){
                         drawTriangle(prevX, prevY, sizeRetractSpot, false);
                     }
                 }
+
+                if (renderOptions["showSegmentStarts"] && !isNotCurrentLayer) {
+                    strokePathIfNeeded("fill");
+                    ctx.strokeStyle = getColorSegmentStartForTool(tool);
+                    drawCross(x, y, sizeSegmentStart);
+                }
             }
 
             // set new (prevX, prevY)
             prevX = x;
             prevY = y;
         }
-        
+
         if (prevPathType != "fill") {
             ctx.stroke();
         }
 
         if (renderOptions["showHead"] && !isNotCurrentLayer) {
-            var sizeHeadSpot = renderOptions["sizeHeadSpot"] * lineWidthFactor + lineWidthFactor / 2;
+            var sizeHeadSpot =
+                renderOptions["sizeHeadSpot"] * lineWidthFactor + lineWidthFactor / 2;
             var shade = tool * 0.15;
-            ctx.fillStyle = pusher.color(renderOptions["colorHead"]).shade(shade).alpha(alpha).html();
+            ctx.fillStyle = pusher
+                .color(renderOptions["colorHead"])
+                .shade(shade)
+                .alpha(alpha)
+                .html();
             ctx.beginPath();
-            ctx.arc(prevX, prevY, sizeHeadSpot, 0, Math.PI*2, true);
+            ctx.circle(prevX, prevY, sizeHeadSpot);
             ctx.fill();
         }
     };
 
-    var applyOffsets = function() {
+    var applyOffsets = function (layerNum) {
         var canvasCenter;
+        var layerBounds;
 
         // determine bed and model offsets
         if (ctx) ctx.translate(-offsetModelX, -offsetModelY);
         if (renderOptions["centerViewport"] || renderOptions["zoomInOnModel"]) {
             canvasCenter = ctx.transformedPoint(canvas.width / 2, canvas.height / 2);
-            if (modelInfo) {
-                offsetModelX = canvasCenter.x - (modelInfo.boundingBox.minX + modelInfo.boundingBox.maxX) / 2;
-                offsetModelY = canvasCenter.y - (modelInfo.boundingBox.minY + modelInfo.boundingBox.maxY) / 2;
+            layerBounds = getLayerBounds(layerNum);
+            if (layerBounds) {
+                offsetModelX = canvasCenter.x - (layerBounds.minX + layerBounds.maxX) / 2;
+                offsetModelY = canvasCenter.y - (layerBounds.minY + layerBounds.maxY) / 2;
             } else {
                 offsetModelX = 0;
                 offsetModelY = 0;
             }
             offsetBedX = 0;
             offsetBedY = 0;
-        } else if (modelInfo && renderOptions["moveModel"]) {
-            offsetModelX = (renderOptions["bed"]["x"] / 2 - (modelInfo.boundingBox.minX + modelInfo.boundingBox.maxX) / 2);
-            offsetModelY = (renderOptions["bed"]["y"] / 2 - (modelInfo.boundingBox.minY + modelInfo.boundingBox.maxY) / 2);
-            offsetBedX = -1 * (renderOptions["bed"]["x"] / 2 - (modelInfo.boundingBox.minX + modelInfo.boundingBox.maxX) / 2);
-            offsetBedY = -1 * (renderOptions["bed"]["y"] / 2 - (modelInfo.boundingBox.minY + modelInfo.boundingBox.maxY) / 2);
-        } else if (renderOptions["bed"]["circular"] || renderOptions["bed"]["centeredOrigin"]) {
-            canvasCenter = ctx.transformedPoint(canvas.width / 2, canvas.height / 2);
-            offsetModelX = canvasCenter.x;
-            offsetModelY = canvasCenter.y;
-            offsetBedX = 0;
-            offsetBedY = 0;
+        } else if (renderOptions["moveModel"]) {
+            layerBounds = getLayerBounds(layerNum);
+            if (layerBounds) {
+                offsetModelX =
+                    renderOptions["bed"]["x"] / 2 -
+                    (layerBounds.minX + layerBounds.maxX) / 2;
+                offsetModelY =
+                    renderOptions["bed"]["y"] / 2 -
+                    (layerBounds.minY + layerBounds.maxY) / 2;
+                offsetBedX =
+                    -1 *
+                    (renderOptions["bed"]["x"] / 2 -
+                        (layerBounds.minX + layerBounds.maxX) / 2);
+                offsetBedY =
+                    -1 *
+                    (renderOptions["bed"]["y"] / 2 -
+                        (layerBounds.minY + layerBounds.maxY) / 2);
+            }
         } else {
             offsetModelX = 0;
             offsetModelY = 0;
@@ -777,9 +1131,9 @@ GCODE.renderer = (function(){
         if (ctx) ctx.translate(offsetModelX, offsetModelY);
     };
 
-    var applyZoom = function() {
+    var applyZoom = function (layerNum) {
         // get middle of canvas
-        var pt = ctx.transformedPoint(canvas.width/2,canvas.height/2);
+        var pt = ctx.transformedPoint(canvas.width / 2, canvas.height / 2);
 
         // get current transform
         var transform = ctx.getTransform();
@@ -792,27 +1146,40 @@ GCODE.renderer = (function(){
             transform = ctx.getTransform();
         }
 
-        if (modelInfo && renderOptions["zoomInOnModel"]) {
-            // if we need to zoom in on model, scale factor is calculated by longer side of object in relation to that axis of canvas
-            var width = modelInfo.boundingBox.maxX - modelInfo.boundingBox.minX;
-            var length = modelInfo.boundingBox.maxY - modelInfo.boundingBox.minY;
+        if (renderOptions["zoomInOnModel"]) {
+            var layerBounds = getLayerBounds(layerNum);
+            if (layerBounds) {
+                // if we need to zoom in on model, scale factor is calculated by longer side of object in relation to that axis of canvas
+                // limited arbitrarily to 50 x extrusion width, to prevent extreme disorienting zoom
+                var width = Math.max(
+                    layerBounds.maxX - layerBounds.minX,
+                    renderOptions["extrusionWidth"] * 50
+                );
+                var length = Math.max(
+                    layerBounds.maxY - layerBounds.minY,
+                    renderOptions["extrusionWidth"] * 50
+                );
 
-            var scaleF = width > length ? (canvas.width - 10) / width : (canvas.height - 10) / length;
-            if (transform.a && transform.d) {
-                scaleX = scaleF / transform.a * (renderOptions["invertAxes"]["x"] ? -1 : 1);
-                scaleY = scaleF / transform.d * (renderOptions["invertAxes"]["y"] ? 1 : -1);
-                ctx.translate(pt.x,pt.y);
-                ctx.scale(scaleX, scaleY);
-                ctx.translate(-pt.x, -pt.y);
+                var scaleF =
+                    width > length
+                        ? (canvas.width - 10) / width
+                        : (canvas.height - 10) / length;
+                if (transform.a && transform.d) {
+                    scaleX =
+                        (scaleF / transform.a) *
+                        (renderOptions["invertAxes"]["x"] ? -1 : 1);
+                    scaleY =
+                        (scaleF / transform.d) *
+                        (renderOptions["invertAxes"]["y"] ? 1 : -1);
+                    ctx.translate(pt.x, pt.y);
+                    ctx.scale(scaleX, scaleY);
+                    ctx.translate(-pt.x, -pt.y);
+                }
             }
-        } else {
-            // reset scale to 1
-            scaleX = 1;
-            scaleY = 1;
         }
     };
 
-    var applyInversion = function() {
+    var applyInversion = function () {
         var width = canvas.width - 10;
         var height = canvas.height - 10;
 
@@ -837,58 +1204,97 @@ GCODE.renderer = (function(){
         currentInvertY = invertY;
     };
 
-// ***** PUBLIC *******
+    var resetViewport = function () {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(1, -1); // invert y axis
+
+        var bedWidth = renderOptions["bed"]["x"];
+        var bedHeight = renderOptions["bed"]["y"];
+        if (renderOptions["bed"]["circular"]) {
+            bedWidth = bedHeight = renderOptions["bed"]["r"] * 2;
+        }
+
+        // Ratio of bed to canvas viewport
+        var viewportRatio = Math.min(
+            (canvas.width - 10) / bedWidth,
+            (canvas.height - 10) / bedHeight
+        );
+
+        // Apply initial translation to center the bed in the viewport
+        var translationX, translationY;
+        if (renderOptions["bed"]["circular"] || renderOptions["bed"]["centeredOrigin"]) {
+            translationX = canvas.width / 2;
+            translationY = canvas.height / 2;
+        } else {
+            translationX = (canvas.width - bedWidth * viewportRatio) / 2;
+            translationY =
+                bedHeight * viewportRatio +
+                (canvas.height - bedHeight * viewportRatio) / 2;
+        }
+
+        ctx.translate(translationX, -translationY);
+        ctx.scale(viewportRatio, viewportRatio);
+
+        // Scaling to apply to move lines and extrusion/retraction markers
+        lineWidthFactor = 1 / viewportRatio;
+
+        offsetModelX = 0;
+        offsetModelY = 0;
+        offsetBedX = 0;
+        offsetBedY = 0;
+    };
+
+    // ***** PUBLIC *******
     return {
-        init: function(){
+        init: function () {
             startCanvas();
+            resetViewport();
             initialized = true;
-            var bedWidth = renderOptions["bed"]["x"];
-            var bedHeight = renderOptions["bed"]["y"];
-            if(renderOptions["bed"]["circular"]) {
-                bedWidth = bedHeight = renderOptions["bed"]["r"] * 2;
-            }
-
-            // Ratio of bed to canvas viewport
-            var viewportRatio = Math.min((canvas.width - 10) / bedWidth, (canvas.height - 10) / bedHeight);
-
-            // Apply initial translation to center the bed in the viewport
-            var translationX, translationY;
-            if (renderOptions["bed"]["circular"]) {
-                translationX = canvas.width / 2;
-                translationY = canvas.height / 2;
-            } else {
-                translationX = (canvas.width - bedWidth * viewportRatio) / 2;
-                translationY = bedHeight * viewportRatio + (canvas.height - bedHeight * viewportRatio) / 2;
-            }
-            ctx.translate(translationX, -translationY);
-
-            ctx.scale(viewportRatio, viewportRatio);
-            
-            offsetModelX = 0;
-            offsetModelY = 0;
-            offsetBedX = 0;
-            offsetBedY = 0;
-
-            // Scaling to apply to move lines and extrusion/retraction markers
-            lineWidthFactor = 1 / viewportRatio;
         },
-        setOption: function(options){
+        setOption: function (options) {
             var mustRefresh = false;
+            var mustReset = false;
+            var mustReapplyPatches = false;
             var dirty = false;
             for (var opt in options) {
-                if (!renderOptions.hasOwnProperty(opt) || !options.hasOwnProperty(opt)) continue;
+                if (!renderOptions.hasOwnProperty(opt) || !options.hasOwnProperty(opt))
+                    continue;
                 if (options[opt] === undefined) continue;
                 if (renderOptions[opt] == options[opt]) continue;
 
                 dirty = true;
                 renderOptions[opt] = options[opt];
-                if ($.inArray(opt, ["moveModel", "centerViewport", "zoomInOnModel", "bed", "invertAxes", "onViewportChange"]) > -1) {
+                if (
+                    $.inArray(opt, [
+                        "moveModel",
+                        "centerViewport",
+                        "zoomInOnModel",
+                        "bed",
+                        "invertAxes",
+                        "onViewportChange",
+                        "chromeArcFix"
+                    ]) > -1
+                ) {
                     mustRefresh = true;
+                }
+
+                if ($.inArray(opt, ["bed", "onViewportChange"]) > -1) {
+                    mustReset = true;
+                }
+
+                if ($.inArray(opt, ["chromeArcFix"]) > -1) {
+                    mustReapplyPatches = true;
                 }
             }
 
             if (!dirty) return;
-            if(initialized) {
+            if (initialized) {
+                if (mustReset) {
+                    resetViewport();
+                }
+                if (mustReapplyPatches) {
+                    applyContextPatches();
+                }
                 if (mustRefresh) {
                     this.refresh();
                 } else {
@@ -896,32 +1302,32 @@ GCODE.renderer = (function(){
                 }
             }
         },
-        getOptions: function(){
+        getOptions: function () {
             return renderOptions;
         },
-        debugGetModel: function(){
+        debugGetModel: function () {
             return model;
         },
-        render: function(layerNum, fromProgress, toProgress){
+        render: function (layerNum, fromProgress, toProgress) {
             if (!initialized) this.init();
-            
+
             layerNumStore = layerNum;
             progressStore.from = fromProgress;
             progressStore.to = toProgress;
 
             reRender();
         },
-        getModelNumLayers: function(){
+        getModelNumLayers: function () {
             return model ? model.length : 1;
         },
-        getLayerNumSegments: function(layer){
-            if(model){
-                return model[layer]?model[layer].length:1;
-            }else{
+        getLayerNumSegments: function (layer) {
+            if (model) {
+                return model[layer] ? model[layer].length : 1;
+            } else {
                 return 1;
             }
         },
-        clear: function() {
+        clear: function () {
             offsetModelX = 0;
             offsetModelY = 0;
             offsetBedX = 0;
@@ -934,7 +1340,7 @@ GCODE.renderer = (function(){
 
             this.doRender([], 0);
         },
-        doRender: function(mdl, layerNum){
+        doRender: function (mdl, layerNum) {
             model = mdl;
             modelInfo = undefined;
 
@@ -953,25 +1359,28 @@ GCODE.renderer = (function(){
             }
 
             applyInversion();
-            applyOffsets();
-            applyZoom();
+            scaleX = 1;
+            scaleY = 1;
 
             this.render(layerNum, 0, toProgress);
         },
-        refresh: function(layerNum) {
+        refresh: function (layerNum) {
             if (layerNum === undefined) layerNum = layerNumStore;
             this.doRender(model, layerNum);
         },
-        getZ: function(layerNum){
-            if(!model || !model[layerNum]){
-                return '-1';
+        resetViewport: function () {
+            resetViewport();
+            reRender();
+        },
+        getZ: function (layerNum) {
+            if (!model || !model[layerNum]) {
+                return "-1";
             }
             var cmds = model[layerNum];
-            for(var i = 0; i < cmds.length; i++){
-                if(cmds[i].prevZ !== undefined) return cmds[i].prevZ;
+            for (var i = 0; i < cmds.length; i++) {
+                if (cmds[i].prevZ !== undefined) return cmds[i].prevZ;
             }
-            return '-1';
+            return "-1";
         }
-
-}
-}());
+    };
+})();
