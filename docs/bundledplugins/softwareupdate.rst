@@ -338,6 +338,15 @@ supported:
     Additional config parameters:
 
     * ``pip``: The URL to use for installing. Presence implies ``method: pip``.
+    * ``pip_command``: The command to use for installing. Defaults to the ``pip`` instance belong to OctoPrint's environment.
+    * ``pip_cwd``: The working directory to use for installing. Defaults to the current working directory.
+    * ``force_reinstall``: Whether to force reinstallation of the package. Defaults to ``false``. Helpful
+      for development and version checks that don't guarantee a Python package version change (e.g. commit based
+      version checks like ``git_commit``, ``github_commit``, ``bitbucket_commit``).
+
+    .. versionchanged:: 1.8.0
+
+       Added ``force_reinstall`` parameter.
 
   * ``single_file_plugin``: Update a single file plugin by re-downloading it from a configured URL.
     Additional config parameters:
@@ -351,7 +360,7 @@ supported:
     * ``update_script``: (mandatory) The path of the script to run. May
       contain placeholders ``{target}`` (for the most recent version specified
       as retrieved from the update check), ``{branch}`` for the branch to switch
-      to to access the release, ``{folder}`` for the working directory
+      to access the release, ``{folder}`` for the working directory
       of the script and ``{python}`` for the python executable OctoPrint is
       running under. Presence implies ``method: update_script``.
     * ``update_folder`` or ``checkout_folder``: (mandatory) The working directory.
@@ -551,7 +560,7 @@ Global credentials
 
 .. versionadded:: 1.5.0
 
-Starting with OctoPrint 1.5.0, the Software Update Plugin supports supplyting a GitHub
+Starting with OctoPrint 1.5.0, the Software Update Plugin supports supplying a GitHub
 API token to use for the ``github_release`` and ``github_commit`` version check types,
 to work around possible rate limit problems if a lot of checks are to be made from a single
 external IP. You may create a `personal access token <https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/creating-a-personal-access-token>`_
@@ -625,9 +634,6 @@ octoprint.plugin.softwareupdate.check_config
    at the (fictional) repository ``https://github.com/someUser/OctoPrint-UpdatePluginDemo``.
 
    .. code-block:: python
-
-      # -*- coding: utf-8 -*-
-      from __future__ import absolute_import, unicode_literals
 
       def get_update_information(*args, **kwargs):
           return dict(

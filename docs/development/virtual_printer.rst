@@ -118,6 +118,12 @@ There many configuration options via ``config.yaml`` for the virtual printer tha
          # False: <filename>
          size: true
 
+         # Whether M20 responses will include timestamp or not (only if size = true as well)
+         #
+         # True: <filename> <filesize in bytes> <timestamp as hex>
+         # False: <filename> <filesize in bytes>
+         timestamp: false
+
          # Whether M20 responses will include longname or not (only if size = true as well)
          #
          # True:  <filename> <filesize in bytes> <longname>
@@ -192,39 +198,55 @@ There many configuration options via ``config.yaml`` for the virtual printer tha
        m115FormatString: "FIRMWARE_NAME: {firmware_name} PROTOCOL_VERSION:1.0"
 
        # Whether to include capability report in M115 output
-       m115ReportCapabilites: false
+       m115ReportCapabilities: true
 
        # Capabilities to report if capability report is enabled
        capabilities:
          AUTOREPORT_TEMP: true
+         AUTOREPORT_TEMP: true
+         AUTOREPORT_SD_STATUS: true
+         AUTOREPORT_POS: false
+         EMERGENCY_PARSER: true
+         EXTENDED_M20: false
+         LFN_WRITE: false
+
+       # Whether to include area report in the M115 output (M115_GEOMETRY_REPORT in Marlin)
+       m115ReportArea: false
 
        # Simulated ambient temperature in °C
        ambientTemperature: 21.3
-       
+
        # Response to M105 when there is a target
        # Placeholders:
        # - heater: The heater id (eg. T0, T1, B)
        # - actual: The actual temperature of the heater
        # - target: The target temperature of heater
        m105TargetFormatString: {heater}:{actual:.2f}/ {target:.2f}
-       
+
        # Response to M105 when there is no target
        # Placeholders:
        # - heater: The heater id (eg. T0, T1, B)
        # - actual: The actual temperature of the heater
        m105NoTargetFormatString: {heater}:{actual:.2f}
-       
+
        # Enable virtual EEPROM
        # If enabled, a file `eeprom.json` will be created in the plugin data folder
-       # to enable settings persistence across connections. Enables M500/1/2/4 commmands
+       # to enable settings persistence across connections. Enables M500/1/2/4 commands
        # And a selection of other settings commands. Responses modeled on Marlin 2.0
        enable_eeprom: true
-       
+
        # Support M503
        support_m503: true
-       
+
        # Resend ratio to simulate noise on the line
        resend_ratio: 0
+
+       # communication errors to simulate at specific line numbers
+       simulated_errors:
+       - 100:resend  # requests a simple resend at line 100
+       - 105:resend_with_timeout  # requests a resend at line 105 and simulates not responding to it
+       - 110:missing_lineno  # simulates a missing line number at line 110
+       - 115:checksum_mismatch  # simulates a checksum mismatch at line 115
 
 .. _sec-development-virtual-printer-log:
 

@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
@@ -10,21 +7,42 @@ import re
 
 from flask import abort, jsonify, request
 from flask_login import current_user
-from past.builtins import basestring
 
 import octoprint.plugin
 import octoprint.util
 from octoprint.access.permissions import Permissions
 from octoprint.server import pluginManager, printer, userManager
 from octoprint.server.api import NO_CONTENT, api
-from octoprint.server.util.flask import no_firstrun_access, with_revalidation_checking
+from octoprint.server.util.flask import (
+    credentials_checked_recently,
+    no_firstrun_access,
+    with_revalidation_checking,
+)
 from octoprint.settings import settings, valid_boolean_trues
+from octoprint.timelapse import configure_timelapse
+from octoprint.webcams import (
+    get_default_webcam,
+    get_snapshot_webcam,
+    get_webcams_as_dicts,
+)
 
 # ~~ settings
 
-FOLDER_TYPES = ("uploads", "timelapse", "timelapse_tmp", "logs", "watched")
-FOLDER_MAPPING = {"timelapseTmp": "timelapse_tmp"}
+FOLDER_TYPES = ("uploads", "timelapse", "watched")
 TIMELAPSE_BITRATE_PATTERN = re.compile(r"\d+[KMGTPEZY]?i?B?", flags=re.IGNORECASE)
+DEPRECATED_WEBCAM_KEYS = (
+    "streamUrl",
+    "streamRatio",
+    "streamTimeout",
+    "streamWebrtcIceServers",
+    "snapshotUrl",
+    "snapshotTimeout",
+    "snapshotSslValidation",
+    "cacheBuster",
+    "flipH",
+    "flipV",
+    "rotate90",
+)
 
 
 def _lastmodified():
@@ -77,6 +95,9 @@ def _etag(lm=None):
     # and likewise if the role of the user changes
     hash_update(repr(roles))
 
+    # of if the user reauthenticates
+    hash_update(repr(credentials_checked_recently()))
+
     return hash.hexdigest()
 
 
@@ -104,7 +125,9 @@ def getSettings():
 
     data = {
         "api": {
-            "key": s.get(["api", "key"]) if Permissions.ADMIN.can() else None,
+            "key": s.get(["api", "key"])
+            if Permissions.ADMIN.can() and credentials_checked_recently()
+            else None,
             "allowCrossOrigin": s.get(["api", "allowCrossOrigin"]),
         },
         "appearance": {
@@ -118,37 +141,13 @@ def getSettings():
             "closeModalsWithClick": s.getBoolean(["appearance", "closeModalsWithClick"]),
             "showInternalFilename": s.getBoolean(["appearance", "showInternalFilename"]),
         },
-        "printer": {
-            "defaultExtrusionLength": s.getInt(
-                ["printerParameters", "defaultExtrusionLength"]
-            )
-        },
-        "webcam": {
-            "webcamEnabled": s.getBoolean(["webcam", "webcamEnabled"]),
-            "timelapseEnabled": s.getBoolean(["webcam", "timelapseEnabled"]),
-            "streamUrl": s.get(["webcam", "stream"]),
-            "streamRatio": s.get(["webcam", "streamRatio"]),
-            "streamTimeout": s.getInt(["webcam", "streamTimeout"]),
-            "snapshotUrl": s.get(["webcam", "snapshot"]),
-            "snapshotTimeout": s.getInt(["webcam", "snapshotTimeout"]),
-            "snapshotSslValidation": s.getBoolean(["webcam", "snapshotSslValidation"]),
-            "ffmpegPath": s.get(["webcam", "ffmpeg"]),
-            "ffmpegCommandline": s.get(["webcam", "ffmpegCommandline"]),
-            "bitrate": s.get(["webcam", "bitrate"]),
-            "ffmpegThreads": s.get(["webcam", "ffmpegThreads"]),
-            "ffmpegVideoCodec": s.get(["webcam", "ffmpegVideoCodec"]),
-            "watermark": s.getBoolean(["webcam", "watermark"]),
-            "flipH": s.getBoolean(["webcam", "flipH"]),
-            "flipV": s.getBoolean(["webcam", "flipV"]),
-            "rotate90": s.getBoolean(["webcam", "rotate90"]),
-            "cacheBuster": s.getBoolean(["webcam", "cacheBuster"]),
-        },
         "feature": {
             "temperatureGraph": s.getBoolean(["feature", "temperatureGraph"]),
             "sdSupport": s.getBoolean(["feature", "sdSupport"]),
             "keyboardControl": s.getBoolean(["feature", "keyboardControl"]),
             "pollWatched": s.getBoolean(["feature", "pollWatched"]),
             "modelSizeDetection": s.getBoolean(["feature", "modelSizeDetection"]),
+            "rememberFileFolder": s.getBoolean(["feature", "rememberFileFolder"]),
             "printStartConfirmation": s.getBoolean(["feature", "printStartConfirmation"]),
             "printCancelConfirmation": s.getBoolean(
                 ["feature", "printCancelConfirmation"]
@@ -158,6 +157,7 @@ def getSettings():
             ),
             "g90InfluencesExtruder": s.getBoolean(["feature", "g90InfluencesExtruder"]),
             "autoUppercaseBlacklist": s.get(["feature", "autoUppercaseBlacklist"]),
+            "enableDragDropUpload": s.getBoolean(["feature", "enableDragDropUpload"]),
         },
         "gcodeAnalysis": {
             "runAt": s.get(["gcodeAnalysis", "runAt"]),
@@ -208,6 +208,7 @@ def getSettings():
             "blockedCommands": s.get(["serial", "blockedCommands"]),
             "ignoredCommands": s.get(["serial", "ignoredCommands"]),
             "pausingCommands": s.get(["serial", "pausingCommands"]),
+            "sdCancelCommand": s.get(["serial", "sdCancelCommand"]),
             "emergencyCommands": s.get(["serial", "emergencyCommands"]),
             "helloCommand": s.get(["serial", "helloCommand"]),
             "ignoreErrorsFromFirmware": s.getBoolean(
@@ -220,8 +221,13 @@ def getSettings():
             "abortHeatupOnCancel": s.getBoolean(["serial", "abortHeatupOnCancel"]),
             "supportResendsWithoutOk": s.get(["serial", "supportResendsWithoutOk"]),
             "waitForStart": s.getBoolean(["serial", "waitForStartOnConnect"]),
+            "waitToLoadSdFileList": s.getBoolean(["serial", "waitToLoadSdFileList"]),
             "alwaysSendChecksum": s.getBoolean(["serial", "alwaysSendChecksum"]),
             "neverSendChecksum": s.getBoolean(["serial", "neverSendChecksum"]),
+            "sendChecksumWithUnknownCommands": s.getBoolean(
+                ["serial", "sendChecksumWithUnknownCommands"]
+            ),
+            "unknownCommandsNeedAck": s.getBoolean(["serial", "unknownCommandsNeedAck"]),
             "sdRelativePath": s.getBoolean(["serial", "sdRelativePath"]),
             "sdAlwaysAvailable": s.getBoolean(["serial", "sdAlwaysAvailable"]),
             "sdLowerCase": s.getBoolean(["serial", "sdLowerCase"]),
@@ -260,14 +266,18 @@ def getSettings():
                 ["serial", "capabilities", "emergency_parser"]
             ),
             "capExtendedM20": s.getBoolean(["serial", "capabilities", "extended_m20"]),
+            "capLfnWrite": s.getBoolean(["serial", "capabilities", "lfn_write"]),
             "resendRatioThreshold": s.getInt(["serial", "resendRatioThreshold"]),
             "resendRatioStart": s.getInt(["serial", "resendRatioStart"]),
+            "ignoreEmptyPorts": s.getBoolean(["serial", "ignoreEmptyPorts"]),
+            "encoding": s.get(["serial", "encoding"]),
+            "enableShutdownActionCommand": s.get(
+                ["serial", "enableShutdownActionCommand"]
+            ),
         },
         "folder": {
             "uploads": s.getBaseFolder("uploads"),
             "timelapse": s.getBaseFolder("timelapse"),
-            "timelapseTmp": s.getBaseFolder("timelapse_tmp"),
-            "logs": s.getBaseFolder("logs"),
             "watched": s.getBaseFolder("watched"),
         },
         "temperature": {
@@ -341,6 +351,65 @@ def getSettings():
     if len(plugin_settings):
         data["plugins"] = plugin_settings
 
+    if Permissions.WEBCAM.can() or (
+        settings().getBoolean(["server", "firstRun"])
+        and not userManager.has_been_customized()
+    ):
+        webcamsDict = get_webcams_as_dicts()
+        data["webcam"] = {
+            "webcamEnabled": s.getBoolean(["webcam", "webcamEnabled"]),
+            "timelapseEnabled": s.getBoolean(["webcam", "timelapseEnabled"]),
+            "ffmpegPath": s.get(["webcam", "ffmpeg"]),
+            "ffmpegCommandline": s.get(["webcam", "ffmpegCommandline"]),
+            "bitrate": s.get(["webcam", "bitrate"]),
+            "ffmpegThreads": s.get(["webcam", "ffmpegThreads"]),
+            "ffmpegVideoCodec": s.get(["webcam", "ffmpegVideoCodec"]),
+            "watermark": s.getBoolean(["webcam", "watermark"]),
+            # webcams & defaults
+            "webcams": webcamsDict,
+            "defaultWebcam": None,
+            "snapshotWebcam": None,
+        }
+
+        for key in DEPRECATED_WEBCAM_KEYS:
+            data["webcam"][key] = None
+
+        defaultWebcam = get_default_webcam()
+        if defaultWebcam:
+            data["webcam"].update(
+                {
+                    "flipH": defaultWebcam.config.flipH,
+                    "flipV": defaultWebcam.config.flipV,
+                    "rotate90": defaultWebcam.config.rotate90,
+                    "defaultWebcam": defaultWebcam.config.name,
+                }
+            )
+
+        compatWebcam = defaultWebcam.config.compat if defaultWebcam is not None else None
+        if compatWebcam:
+            data["webcam"].update(
+                {
+                    "streamUrl": compatWebcam.stream,
+                    "streamRatio": compatWebcam.streamRatio,
+                    "streamTimeout": compatWebcam.streamTimeout,
+                    "streamWebrtcIceServers": compatWebcam.streamWebrtcIceServers,
+                    "snapshotUrl": compatWebcam.snapshot,
+                    "snapshotTimeout": compatWebcam.snapshotTimeout,
+                    "snapshotSslValidation": compatWebcam.snapshotSslValidation,
+                    "cacheBuster": compatWebcam.cacheBuster,
+                }
+            )
+
+        snapshotWebcam = get_snapshot_webcam()
+        if snapshotWebcam:
+            data["webcam"].update(
+                {
+                    "snapshotWebcam": snapshotWebcam.config.name,
+                }
+            )
+    else:
+        data["webcam"] = {}
+
     return jsonify(data)
 
 
@@ -386,11 +455,8 @@ def _get_plugin_settings():
 @no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def setSettings():
-    if "application/json" not in request.headers["Content-Type"]:
-        abort(400, description="Expected content-type JSON")
-
     data = request.get_json()
-    if data is None or not isinstance(data, dict):
+    if not isinstance(data, dict):
         abort(400, description="Malformed JSON body in request")
 
     response = _saveSettings(data)
@@ -401,7 +467,7 @@ def setSettings():
 
 @api.route("/settings/apikey", methods=["POST"])
 @no_firstrun_access
-@Permissions.SETTINGS.require(403)
+@Permissions.ADMIN.require(403)
 def generateApiKey():
     apikey = settings().generateApiKey()
     return jsonify(apikey=apikey)
@@ -409,7 +475,7 @@ def generateApiKey():
 
 @api.route("/settings/apikey", methods=["DELETE"])
 @no_firstrun_access
-@Permissions.SETTINGS.require(403)
+@Permissions.ADMIN.require(403)
 def deleteApiKey():
     settings().deleteApiKey()
     return NO_CONTENT
@@ -461,17 +527,14 @@ def _saveSettings(data):
 
     if "folder" in data:
         try:
-            folders = {
-                FOLDER_MAPPING.get(folder, folder): path
-                for folder, path in data["folder"].items()
-            }
+            folders = data["folder"]
             future = {}
             for folder in FOLDER_TYPES:
                 future[folder] = s.getBaseFolder(folder)
                 if folder in folders:
-                    future[folder] = data["folder"][folder]
+                    future[folder] = folders[folder]
 
-            for folder in data["folder"]:
+            for folder in folders:
                 if folder not in FOLDER_TYPES:
                     continue
                 for other_folder in FOLDER_TYPES:
@@ -487,6 +550,7 @@ def _saveSettings(data):
 
                 s.setBaseFolder(folder, future[folder])
         except Exception:
+            logger.exception("Something went wrong while saving a folder path")
             abort(400, description="At least one of the configured folders is invalid")
 
     if "api" in data:
@@ -534,23 +598,18 @@ def _saveSettings(data):
             )
 
     if "webcam" in data:
+        for key in DEPRECATED_WEBCAM_KEYS:
+            if key in data["webcam"]:
+                logger.warning(
+                    f"Setting webcam.{key} via the API is no longer supported, please use the individual settings of the default webcam instead."
+                )
+
         if "webcamEnabled" in data["webcam"]:
             s.setBoolean(["webcam", "webcamEnabled"], data["webcam"]["webcamEnabled"])
         if "timelapseEnabled" in data["webcam"]:
             s.setBoolean(
                 ["webcam", "timelapseEnabled"], data["webcam"]["timelapseEnabled"]
             )
-        if "streamUrl" in data["webcam"]:
-            s.set(["webcam", "stream"], data["webcam"]["streamUrl"])
-        if "streamRatio" in data["webcam"] and data["webcam"]["streamRatio"] in (
-            "16:9",
-            "4:3",
-        ):
-            s.set(["webcam", "streamRatio"], data["webcam"]["streamRatio"])
-        if "streamTimeout" in data["webcam"]:
-            s.setInt(["webcam", "streamTimeout"], data["webcam"]["streamTimeout"])
-        if "snapshotUrl" in data["webcam"]:
-            s.set(["webcam", "snapshot"], data["webcam"]["snapshotUrl"])
         if "snapshotTimeout" in data["webcam"]:
             s.setInt(["webcam", "snapshotTimeout"], data["webcam"]["snapshotTimeout"])
         if "snapshotSslValidation" in data["webcam"]:
@@ -603,14 +662,13 @@ def _saveSettings(data):
             s.set(["webcam", "ffmpegVideoCodec"], data["webcam"]["ffmpegVideoCodec"])
         if "watermark" in data["webcam"]:
             s.setBoolean(["webcam", "watermark"], data["webcam"]["watermark"])
-        if "flipH" in data["webcam"]:
-            s.setBoolean(["webcam", "flipH"], data["webcam"]["flipH"])
-        if "flipV" in data["webcam"]:
-            s.setBoolean(["webcam", "flipV"], data["webcam"]["flipV"])
-        if "rotate90" in data["webcam"]:
-            s.setBoolean(["webcam", "rotate90"], data["webcam"]["rotate90"])
-        if "cacheBuster" in data["webcam"]:
-            s.setBoolean(["webcam", "cacheBuster"], data["webcam"]["cacheBuster"])
+        if "defaultWebcam" in data["webcam"]:
+            s.set(["webcam", "defaultWebcam"], data["webcam"]["defaultWebcam"])
+        if "snapshotWebcam" in data["webcam"]:
+            s.set(["webcam", "snapshotWebcam"], data["webcam"]["snapshotWebcam"])
+
+            # timelapse needs to be reconfigured now since it depends on the current snapshot webcam
+            configure_timelapse()
 
     if "feature" in data:
         if "temperatureGraph" in data["feature"]:
@@ -628,6 +686,11 @@ def _saveSettings(data):
         if "modelSizeDetection" in data["feature"]:
             s.setBoolean(
                 ["feature", "modelSizeDetection"], data["feature"]["modelSizeDetection"]
+            )
+        if "rememberFileFolder" in data["feature"]:
+            s.setBoolean(
+                ["feature", "rememberFileFolder"],
+                data["feature"]["rememberFileFolder"],
             )
         if "printStartConfirmation" in data["feature"]:
             s.setBoolean(
@@ -655,6 +718,11 @@ def _saveSettings(data):
             s.set(
                 ["feature", "autoUppercaseBlacklist"],
                 data["feature"]["autoUppercaseBlacklist"],
+            )
+        if "enableDragDropUpload" in data["feature"]:
+            s.setBoolean(
+                ["feature", "enableDragDropUpload"],
+                data["feature"]["enableDragDropUpload"],
             )
 
     if "gcodeAnalysis" in data:
@@ -797,6 +865,8 @@ def _saveSettings(data):
             data["serial"]["pausingCommands"], (list, tuple)
         ):
             s.set(["serial", "pausingCommands"], data["serial"]["pausingCommands"])
+        if "sdCancelCommand" in data["serial"]:
+            s.set(["serial", "sdCancelCommand"], data["serial"]["sdCancelCommand"])
         if "emergencyCommands" in data["serial"] and isinstance(
             data["serial"]["emergencyCommands"], (list, tuple)
         ):
@@ -822,6 +892,11 @@ def _saveSettings(data):
             s.setBoolean(
                 ["serial", "waitForStartOnConnect"], data["serial"]["waitForStart"]
             )
+        if "waitToLoadSdFileList" in data["serial"]:
+            s.setBoolean(
+                ["serial", "waitToLoadSdFileList"],
+                data["serial"]["waitToLoadSdFileList"],
+            )
         if "alwaysSendChecksum" in data["serial"]:
             s.setBoolean(
                 ["serial", "alwaysSendChecksum"], data["serial"]["alwaysSendChecksum"]
@@ -829,6 +904,16 @@ def _saveSettings(data):
         if "neverSendChecksum" in data["serial"]:
             s.setBoolean(
                 ["serial", "neverSendChecksum"], data["serial"]["neverSendChecksum"]
+            )
+        if "sendChecksumWithUnknownCommands" in data["serial"]:
+            s.setBoolean(
+                ["serial", "sendChecksumWithUnknownCommands"],
+                data["serial"]["sendChecksumWithUnknownCommands"],
+            )
+        if "unknownCommandsNeedAck" in data["serial"]:
+            s.setBoolean(
+                ["serial", "unknownCommandsNeedAck"],
+                data["serial"]["unknownCommandsNeedAck"],
             )
         if "sdRelativePath" in data["serial"]:
             s.setBoolean(["serial", "sdRelativePath"], data["serial"]["sdRelativePath"])
@@ -942,12 +1027,30 @@ def _saveSettings(data):
                 ["serial", "capabilities", "extended_m20"],
                 data["serial"]["capExtendedM20"],
             ),
+        if "capLfnWrite" in data["serial"]:
+            s.setBoolean(
+                ["serial", "capabilities", "lfn_write"],
+                data["serial"]["capLfnWrite"],
+            )
         if "resendRatioThreshold" in data["serial"]:
             s.setInt(
                 ["serial", "resendRatioThreshold"], data["serial"]["resendRatioThreshold"]
             )
         if "resendRatioStart" in data["serial"]:
             s.setInt(["serial", "resendRatioStart"], data["serial"]["resendRatioStart"])
+        if "ignoreEmptyPorts" in data["serial"]:
+            s.setBoolean(
+                ["serial", "ignoreEmptyPorts"], data["serial"]["ignoreEmptyPorts"]
+            )
+
+        if "encoding" in data["serial"]:
+            s.set(["serial", "encoding"], data["serial"]["encoding"])
+
+        if "enableShutdownActionCommand" in data["serial"]:
+            s.setBoolean(
+                ["serial", "enableShutdownActionCommand"],
+                data["serial"]["enableShutdownActionCommand"],
+            )
 
         oldLog = s.getBoolean(["serial", "log"])
         if "log" in data["serial"]:
@@ -1006,7 +1109,7 @@ def _saveSettings(data):
             for name, script in data["scripts"]["gcode"].items():
                 if name == "snippets":
                     continue
-                if not isinstance(script, basestring):
+                if not isinstance(script, str):
                     continue
                 s.saveScript(
                     "gcode", name, script.replace("\r\n", "\n").replace("\r", "\n")
@@ -1114,7 +1217,7 @@ def _saveSettings(data):
                     plugin.on_settings_save(data["plugins"][plugin_id])
                 except TypeError:
                     logger.warning(
-                        "Could not save settings for plugin {name} ({version}) since it called super(...)".format(
+                        "Could not save settings for plugin {name} ({version}). It may have called super(...)".format(
                             name=plugin._plugin_name, version=plugin._plugin_version
                         )
                     )
@@ -1125,7 +1228,8 @@ def _saveSettings(data):
                         "Please contact the plugin's author and ask to update the plugin to use a direct call like"
                     )
                     logger.warning(
-                        "octoprint.plugin.SettingsPlugin.on_settings_save(self, data) instead."
+                        "octoprint.plugin.SettingsPlugin.on_settings_save(self, data) instead.",
+                        exc_info=True,
                     )
                 except Exception:
                     logger.exception(

@@ -1,7 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
+import logging
 
 ADMIN_GROUP = "admins"
 USER_GROUP = "users"
 GUEST_GROUP = "guests"
 READONLY_GROUP = "readonly"
+
+
+def auth_log(message):
+    logging.getLogger("AUTH").info(message)

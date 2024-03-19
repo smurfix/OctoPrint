@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-# NO unicode_literals because Py2 setuptool can't cope with them
+### NOTE #################################################################################
+# This file has to stay format compatible to Python 2, or pip under Python 2 will
+# not be able to detect that OctoPrint requires Python 3 but instead fail with a
+# syntax error.
+#
+# So, no f-strings, no walrus operators, no pyupgrade or codemods.
+##########################################################################################
 
-__author__ = u"Gina Häußge <osd@foosel.net>"
-__license__ = u"GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
-__copyright__ = u"Copyright (C) 2015 The OctoPrint Project - Released under terms of the AGPLv3 License"
+__author__ = "Gina Häußge <osd@foosel.net>"
+__license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
+__copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import glob
 import os
@@ -64,12 +70,6 @@ def recursively_handle_files(
 def has_requirement(requirement, requirements):
     if requirement is None or requirements is None:
         return False
-
-    # from past.builtins import basestring
-
-    # assert isinstance(requirement, basestring)
-    # assert isinstance(requirements, (list, tuple))
-    # assert all(list(map(lambda x: x is not None and isinstance(x, basestring), requirements)))
 
     requirement = requirement.lower()
     requirements = [r.lower() for r in requirements]
@@ -158,6 +158,12 @@ class CleanCommand(_clean):
             )
 
 
+def _normalize_locale(l):
+    from babel.core import Locale
+
+    return str(Locale.parse(l))
+
+
 class NewTranslation(Command):
     description = "create a new translation"
     user_options = [
@@ -190,7 +196,7 @@ class NewTranslation(Command):
         self.babel_init_messages.initialize_options()
 
     def finalize_options(self):
-        self.babel_init_messages.locale = self.locale
+        self.babel_init_messages.locale = _normalize_locale(self.locale)
         self.babel_init_messages.input_file = self.__class__.pot_file
         self.babel_init_messages.output_dir = self.__class__.output_dir
         self.babel_init_messages.finalize_options()
@@ -327,7 +333,8 @@ class RefreshTranslation(Command):
 
         self.babel_update_messages.input_file = self.__class__.pot_file
         self.babel_update_messages.output_dir = self.__class__.output_dir
-        self.babel_update_messages.locale = self.locale
+        if self.locale:
+            self.babel_update_messages.locale = _normalize_locale(self.locale)
         self.babel_update_messages.finalize_options()
 
     def run(self):
@@ -392,7 +399,7 @@ class BundleTranslation(Command):
         pass
 
     def run(self):
-        locale = self.locale
+        locale = _normalize_locale(self.locale)
         source_path = os.path.join(self.__class__.source_dir, locale)
         target_path = os.path.join(self.__class__.target_dir, locale)
 
@@ -456,7 +463,7 @@ class PackTranslation(Command):
             raise ValueError("locale must be provided")
 
     def run(self):
-        locale = self.locale
+        locale = _normalize_locale(self.locale)
         locale_dir = os.path.join(self.__class__.source_dir, locale)
 
         if not os.path.isdir(locale_dir):
@@ -518,6 +525,11 @@ def get_babel_commandclasses(
     mail_address="i18n@octoprint.org",
     copyright_holder="The OctoPrint Project",
 ):
+    try:
+        import babel
+    except ImportError:
+        return {}
+
     result = {
         "babel_new": NewTranslation.for_options(pot_file=pot_file, output_dir=output_dir),
         "babel_extract": ExtractTranslation.for_options(

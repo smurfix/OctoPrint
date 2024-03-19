@@ -4,11 +4,21 @@
  * Time: 12:18 PM
  */
 
-var gcode;
+// base url to use for API calls; it's the worker location minus the worker.js path
+var baseUrl = self.location.href.substring(
+    0,
+    self.location.href.length - "/plugin/gcodeviewer/static/js/viewer/worker.js".length
+);
+
+// raw path suitable for fetch()
+var url;
+
+// path relative to Local
+var path;
+
 var firstReport;
 var toolOffsets = [{x: 0, y: 0}];
 var g90InfluencesExtruder = false;
-var z_heights = {};
 var model = [];
 var max = {x: undefined, y: undefined, z: undefined};
 var min = {x: undefined, y: undefined, z: undefined};
@@ -37,36 +47,43 @@ var layerHeight = 0;
 var layerCnt = 0;
 var speeds = {extrude: [], retract: [], move: []};
 var speedsByLayer = {extrude: {}, retract: {}, move: {}};
+var emptyLayers = [];
+var percentageByLayer = [];
 
-var sendLayerToParent = function (layerNum, z, progress) {
-    self.postMessage({
-        cmd: "returnLayer",
-        msg: {
-            cmds: model[layerNum],
-            layerNum: layerNum,
-            zHeightObject: {zValue: z, layer: z_heights[z]},
-            isEmpty: false,
-            progress: progress
-        }
-    });
+var mustCompress = false;
+var skipUntil = null;
+var skipUntilPresent = false;
+
+importScripts("../lib/pako.js");
+
+var compress = function (data) {
+    if (!mustCompress) return data;
+
+    return pako.deflate(JSON.stringify(data));
 };
 
-var sendMultiLayerToParent = function (layerNum, z, progress) {
-    var tmpModel = [];
-    var tmpZHeight = {};
+var decompress = function (data) {
+    return JSON.parse(pako.inflate(data, {to: "string"}));
+};
 
-    for (var i = 0; i < layerNum.length; i++) {
-        tmpModel[layerNum[i]] = model[layerNum[i]];
-        tmpZHeight[layerNum[i]] = z_heights[z[i]];
+var sendLayersToParent = function (layers, progress) {
+    var l = [];
+    for (var i = 0; i < layers.length; i++) {
+        if (model[layers[i]]) l.push(layers[i]);
+    }
+
+    var m = [];
+    for (var i = 0; i < l.length; i++) {
+        if (!model[l[i]]) continue;
+        if (!(model[l[i]] instanceof Uint8Array)) model[l[i]] = compress(model[l[i]]);
+        m[l[i]] = model[l[i]];
     }
 
     self.postMessage({
-        cmd: "returnMultiLayer",
+        cmd: "returnLayers",
         msg: {
-            model: tmpModel,
-            layerNum: layerNum,
-            zHeightObject: {zValue: z, layer: tmpZHeight},
-            isEmpty: false,
+            model: m,
+            layers: l,
             progress: progress
         }
     });
@@ -98,7 +115,9 @@ var sendAnalyzeDone = function () {
             layerTotal: model.length,
             speeds: speeds,
             speedsByLayer: speedsByLayer,
-            printTimeByLayer: printTimeByLayer
+            printTimeByLayer: printTimeByLayer,
+            percentageByLayer: percentageByLayer,
+            emptyLayers: emptyLayers
         }
     });
 };
@@ -110,8 +129,10 @@ var purgeLayers = function () {
         if (!model[i]) {
             purge = true;
         } else {
-            for (var j = 0; j < model[i].length; j++) {
-                if (model[i][j].extrude) purge = false;
+            var cmds = model[i];
+            if (cmds instanceof Uint8Array) cmds = decompress(cmds);
+            for (var j = 0; j < cmds.length; j++) {
+                if (cmds[j].extrude) purge = false;
             }
         }
         if (!purge) {
@@ -168,7 +189,13 @@ var analyzeModel = function () {
     for (var i = 0; i < model.length; i++) {
         var cmds = model[i];
         if (!cmds) continue;
+        if (cmds instanceof Uint8Array) cmds = decompress(cmds);
 
+        if (cmds.length > 0) {
+            percentageByLayer[i] = cmds[0].percentage;
+        }
+
+        var layerExtrude = false;
         for (var j = 0; j < cmds.length; j++) {
             var tool = cmds[j].tool;
 
@@ -301,7 +328,16 @@ var analyzeModel = function () {
             if (speedsByLayer[type][cmds[j].prevZ].indexOf(cmds[j].speed) === -1) {
                 speedsByLayer[type][cmds[j].prevZ][speedIndex] = cmds[j].speed;
             }
+
+            if (extrude) {
+                layerExtrude = true;
+            }
         }
+
+        if (!layerExtrude) {
+            emptyLayers[i] = true;
+        }
+
         sendSizeProgress((i / model.length) * 100);
     }
     purgeLayers();
@@ -314,12 +350,81 @@ var analyzeModel = function () {
     sendAnalyzeDone();
 };
 
-var doParse = function () {
+var gCodeLineGenerator = async function* (fileURL) {
+    const utf8Decoder = new TextDecoder("utf-8");
+    const response = await fetch(fileURL);
+
+    // the download failed.
+    if (!response.ok) return;
+
+    // we use these two variables to calculate the percentage.
+    var totalDownloadLength = response.headers.get("X-Original-Content-Length");
+    var currentDownloadLength = 0;
+
+    // some init
+    const re = /\n|\r|\r\n/gm;
+    let startIndex = 0;
+
+    // create a reader object that will read the incoming data
+    const reader = response.body.getReader();
+
+    // lets read a first data chunk
+    let {value: chunk, done: readerDone} = await reader.read();
+    chunk = chunk ? utf8Decoder.decode(chunk) : "";
+
+    // now continue until all the downloaded data is processed.
+    for (;;) {
+        // cut at a new line
+        let result = re.exec(chunk);
+        if (!result) {
+            // there was not a complete line, what is up?
+
+            if (readerDone) {
+                // we reached the end of the file.
+                break;
+            }
+            // lets read a new chunk
+            let remainder = chunk.substr(startIndex);
+
+            //console.log("reading chunk..."); // debug for #4879
+            ({value: chunk, done: readerDone} = await reader.read());
+            //console.log("read chunk"); // debug for #4879
+
+            // concatenate with our leftovers from the previous chunk
+            chunk = remainder + (chunk ? utf8Decoder.decode(chunk) : "");
+            // reset the indexes
+            startIndex = re.lastIndex = 0;
+            continue;
+        }
+        // we use re.lastIndex and not result.index so we include
+        //  the actual terminator.
+        currentDownloadLength += re.lastIndex - startIndex;
+        // return the data to the caller
+        yield [
+            chunk.substring(startIndex, result.index),
+            (100 * currentDownloadLength) / totalDownloadLength
+        ];
+
+        // move to after the line we just returned
+        startIndex = re.lastIndex;
+    }
+
+    if (startIndex < chunk.length) {
+        // last line didn't end in a newline char
+        currentDownloadLength += chunk.length - startIndex;
+        // return the data to the caller
+        yield [
+            chunk.substr(startIndex),
+            (100 * currentDownloadLength) / totalDownloadLength
+        ];
+    }
+};
+
+var doParse = async function () {
     var argChar, numSlice;
+    var activeLayer = undefined;
     var sendLayer = undefined;
-    var sendLayerZ = 0;
     var sendMultiLayer = [];
-    var sendMultiLayerZ = [];
     var lastSend = 0;
 
     var layer = 0;
@@ -338,6 +443,8 @@ var doParse = function () {
     var relativeMode = false;
     var zLift = false;
     var zLiftZ = undefined;
+    var maxLiftZ = undefined;
+    var zLiftLayer = undefined;
     var zLiftMoves = [];
 
     var dcExtrude = false;
@@ -352,10 +459,25 @@ var doParse = function () {
     // visualizer doesn't actually have a physical offset ;)
     var activeToolOffset = toolOffsets[0];
 
+    // skipUntil preparations
+    var skipUntilFound = false;
+
     var i, j, args;
 
+    // if skipUntil is set, get skipUntilPresent
+    skipUntilPresent = false;
+    if (skipUntil !== undefined && skipUntil !== "") {
+        result = await fetch(
+            baseUrl + "/plugin/gcodeviewer/skipuntilcheck/local/" + path
+        );
+        if (result.ok) {
+            response = await result.json();
+            skipUntilPresent = response.present;
+        }
+    }
+
     model = [];
-    for (i = 0; i < gcode.length; i++) {
+    for await (let [line, percentage] of gCodeLineGenerator(url)) {
         x = undefined;
         y = undefined;
         z = undefined;
@@ -364,8 +486,11 @@ var doParse = function () {
         center_j = undefined;
         direction = undefined;
 
-        var line = gcode[i].line;
-        var percentage = gcode[i].percentage;
+        // find the skipUntil if it is present
+        // we do not actually remove the line, it is parsed normally.
+        if (skipUntilPresent && !skipUntilFound && line.startsWith(skipUntil)) {
+            skipUntilFound = true;
+        }
 
         extrude = false;
         line = line.split(/[\(;]/)[0];
@@ -378,9 +503,7 @@ var doParse = function () {
         var addToModel = false;
         var move = false;
 
-        var log = false;
-
-        if (/^(?:G0|G1|G2|G3)(\.\d+)?\s/i.test(line)) {
+        if (/^(?:G0|G1|G2|G3|G00|G01|G02|G03)(\.\d+)?\s/i.test(line)) {
             args = line.split(/\s/);
 
             for (j = 0; j < args.length; j++) {
@@ -458,8 +581,10 @@ var doParse = function () {
                         center_j = Number(args[j].slice(1));
                         break;
                     case "g":
-                        if (args[j].charAt(1).toLowerCase() === "2") direction = -1;
-                        if (args[j].charAt(1).toLowerCase() === "3") direction = 1;
+                        if (args[j].charAt(1) === "2" || args[j].charAt(2) === "2")
+                            direction = -1;
+                        else if (args[j].charAt(1) === "3" || args[j].charAt(2) === "3")
+                            direction = 1;
                         break;
                 }
             }
@@ -601,39 +726,34 @@ var doParse = function () {
             if (!activeToolOffset) activeToolOffset = {x: 0, y: 0};
         }
 
-        // If move is on a new height and it's not extruding and
-        // it's not currently already in a Z-lift, assume it's possibly a Z-lift
-        if (typeof z !== "undefined" && z !== prevZ && !extrude && !zLift) {
-            zLift = true;
-            zLiftZ = prevZ;
+        if (typeof z !== "undefined" && z !== prevZ) {
+            if (!extrude && !zLift) {
+                // possible z-lift
+                zLift = true;
+                zLiftZ = maxLiftZ = prevZ;
+                zLiftLayer = layer;
+            }
+
+            if (zLift && z > maxLiftZ) {
+                maxLiftZ = z;
+            }
+
+            layer = model.length;
+            prevZ = z;
         }
-        // We're extruding, Z-lift is over
+
         if (extrude) {
+            // extrude = z-lift over
             zLift = false;
         }
 
-        if (typeof z !== "undefined" && z !== prevZ) {
-            if (z_heights[z] !== undefined) {
-                layer = z_heights[z];
-            } else {
-                layer = model.length;
-                z_heights[z] = layer;
-            }
-
-            sendLayer = layer;
-            sendLayerZ = z;
-            prevZ = z;
-        } else if (typeof z === "undefined" && typeof prevZ !== "undefined") {
-            if (z_heights.hasOwnProperty(prevZ)) {
-                layer = z_heights[prevZ];
-            } else {
-                layer = model.length;
-                z_heights[prevZ] = layer;
-            }
-        }
-
-        if (addToModel) {
+        // if skipUntilPresent is true, we will not add anything to
+        // the model until the skipUntil string is found.
+        if (addToModel && (!skipUntilPresent || skipUntilFound)) {
             if (!model[layer]) model[layer] = [];
+            if (model[layer] instanceof Uint8Array)
+                model[layer] = decompress(model[layer]);
+
             var command = {
                 x: x,
                 y: y,
@@ -652,31 +772,74 @@ var doParse = function () {
                 prevY: prevY,
                 prevZ: prevZ,
                 speed: lastF,
-                gcodeLine: i,
+                gcodeLine: i + 1,
                 percentage: percentage,
                 tool: tool
             };
 
             if (zLift) {
-                // Insert zLift moves for later processing
+                // Insert zLift moves for later processing - they might be part of
+                // the active layer still
                 zLiftMoves.push({
                     command: command,
                     layer: layer
                 });
-            } else if (zLiftMoves.length > 0) {
-                // there's something to be checked in the Z-lift cache
-                if (prevZ === zLiftZ) {
-                    zLiftMoves.forEach(function (zLiftMove) {
-                        model[zLiftMove.layer].splice(
-                            model[layer].indexOf(zLiftMove.command),
-                            1
-                        );
-                        model[z_heights[zLiftZ]].push(zLiftMove.command);
-                    });
+            } else {
+                if (zLiftMoves.length > 0) {
+                    // there's something to be checked in the Z-lift cache
+                    if (prevZ < maxLiftZ) {
+                        zLiftMoves.forEach(function (zLiftMove) {
+                            if (model[zLiftMove.layer] instanceof Uint8Array)
+                                model[zLiftMove.layer] = decompress(
+                                    model[zLiftMove.layer]
+                                );
+                            // move command from move layer...
+                            model[zLiftMove.layer].splice(
+                                model[layer].indexOf(zLiftMove.command),
+                                1
+                            );
+                            if (model[zLiftLayer] instanceof Uint8Array)
+                                model[zLiftLayer] = decompress(model[zLiftLayer]);
+                            // ... to z-lift layer
+                            model[zLiftLayer].push(zLiftMove.command);
+                        });
+
+                        // clean up empty layers at the end of the model
+                        var spliceFrom = undefined;
+                        for (var l = model.length - 1; l > 0; l--) {
+                            if (model[l].length > 0) break;
+                            spliceFrom = l;
+                        }
+                        if (spliceFrom !== undefined) {
+                            model.splice(spliceFrom, model.length - spliceFrom);
+                        }
+
+                        // finally determine the new active layer
+                        if (prevZ === zLiftZ) {
+                            // initial lifted on layer if we are back at a prior height
+                            layer = zLiftLayer;
+                        } else {
+                            // new layer if this a new z, just lower than max z-lift
+                            model[model.length] = [];
+                            layer = model.length - 1;
+                        }
+                    }
+
+                    // clear up cached Z-lift moves
+                    zLiftMoves = [];
+                    zLiftZ = undefined;
+                    maxLiftZ = undefined;
+                    zLiftLayer = undefined;
                 }
-                // clear up cached Z-lift moves
-                zLiftMoves = [];
-                zLiftZ = undefined;
+
+                // have we progressed a layer?
+                if (activeLayer === undefined || layer > activeLayer) {
+                    // the formerly active layer is now done and can be sent
+                    sendLayer = activeLayer;
+
+                    // the current layer is the new active layer
+                    activeLayer = layer;
+                }
             }
 
             model[layer].push(command);
@@ -688,27 +851,31 @@ var doParse = function () {
         }
 
         if (typeof sendLayer !== "undefined") {
-            if (i - lastSend > gcode.length * 0.02 && sendMultiLayer.length !== 0) {
-                lastSend = i;
-                sendMultiLayerToParent(
-                    sendMultiLayer,
-                    sendMultiLayerZ,
-                    (i / gcode.length) * 100
-                );
+            if (percentage - lastSend > 2 && sendMultiLayer.length !== 0) {
+                lastSend = percentage;
+                sendLayersToParent(sendMultiLayer, percentage);
                 sendMultiLayer = [];
                 sendMultiLayerZ = [];
             }
-            sendMultiLayer[sendMultiLayer.length] = sendLayer;
-            sendMultiLayerZ[sendMultiLayerZ.length] = sendLayerZ;
+
+            if (sendMultiLayer.indexOf(sendLayer) === -1) {
+                sendMultiLayer.push(sendLayer);
+            }
+
             sendLayer = undefined;
-            sendLayerZ = undefined;
         }
     }
-    sendMultiLayerToParent(sendMultiLayer, sendMultiLayerZ, (i / gcode.length) * 100);
+
+    // we are done, send the final layer
+    if (sendMultiLayer.indexOf(activeLayer) === -1) {
+        sendMultiLayer.push(activeLayer);
+    }
+    sendLayersToParent(sendMultiLayer, 100);
 };
 
-var parseGCode = function (message) {
-    gcode = message.gcode;
+var parseGCode = async function (message) {
+    url = message.url;
+    path = message.path;
     firstReport = message.options.firstReport;
     toolOffsets = message.options.toolOffsets;
     if (!toolOffsets || toolOffsets.length === 0) toolOffsets = [{x: 0, y: 0}];
@@ -716,9 +883,10 @@ var parseGCode = function (message) {
     ignoreOutsideBed = message.options.ignoreOutsideBed;
     g90InfluencesExtruder = message.options.g90InfluencesExtruder;
     boundingBox.minZ = min.z = message.options.bedZ;
+    mustCompress = message.options.compress;
+    skipUntil = message.skipUntil;
 
-    doParse();
-    gcode = [];
+    await doParse();
     self.postMessage({
         cmd: "returnModel",
         msg: {}
@@ -728,10 +896,8 @@ var parseGCode = function (message) {
 var runAnalyze = function (message) {
     analyzeModel();
     model = [];
-    z_heights = [];
     gcode = undefined;
     firstReport = undefined;
-    z_heights = {};
     model = [];
     max = {x: undefined, y: undefined, z: undefined};
     min = {x: undefined, y: undefined, z: undefined};
@@ -752,6 +918,8 @@ var runAnalyze = function (message) {
     layerCnt = 0;
     speeds = {extrude: [], retract: [], move: []};
     speedsByLayer = {extrude: {}, retract: {}, move: {}};
+    emptyLayers = [];
+    percentageByLayer = [];
 };
 
 var setOption = function (options) {
@@ -765,7 +933,7 @@ onmessage = function (e) {
     var data = e.data;
     // for some reason firefox doesn't garbage collect when something inside closures is deleted, so we delete and recreate whole object eaech time
     switch (data.cmd) {
-        case "parseGCode":
+        case "downloadAndParseGCode":
             parseGCode(data.msg);
             break;
         case "setOption":

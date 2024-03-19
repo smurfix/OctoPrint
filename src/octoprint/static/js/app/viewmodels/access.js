@@ -35,15 +35,34 @@ $(function () {
 
             self.currentUser = ko.observable(self.emptyUser).extend({notify: "always"});
 
+            self.isCurrentUser = (user) => {
+                return user && user.name && user.name == access.loginState.username();
+            };
+
+            self.isDeleteUserEnabled = (user) => {
+                return !self.isCurrentUser(user);
+            };
+
             self.editor = {
                 name: ko.observable(undefined),
                 groups: ko.observableArray([]),
                 permissions: ko.observableArray([]),
                 password: ko.observable(undefined),
+                currentPassword: ko.observable(undefined),
                 repeatedPassword: ko.observable(undefined),
                 passwordMismatch: ko.pureComputed(function () {
                     return self.editor.password() !== self.editor.repeatedPassword();
                 }),
+                providedUsername: ko.pureComputed(function () {
+                    return self.editor.name() && self.editor.name().trim();
+                }),
+                validUsername: ko.pureComputed(function () {
+                    return (
+                        !self.editor.name() ||
+                        self.editor.name() == self.editor.name().trim()
+                    );
+                }),
+                currentPasswordMismatch: ko.observable(false),
                 apikey: ko.observable(undefined),
                 active: ko.observable(undefined),
                 permissionSelectable: function (permission) {
@@ -85,8 +104,8 @@ $(function () {
                 confirm: undefined,
                 valid: ko.pureComputed(function () {
                     return (
-                        self.editor.name() &&
-                        self.editor.name().trim() &&
+                        self.editor.providedUsername() &&
+                        self.editor.validUsername() &&
                         (!self.editor.new() ||
                             (self.editor.password() &&
                                 self.editor.password().trim() &&
@@ -128,6 +147,11 @@ $(function () {
                 }
                 self.editor.password(undefined);
                 self.editor.repeatedPassword(undefined);
+                self.editor.currentPassword(undefined);
+                self.editor.currentPasswordMismatch(false);
+            });
+            self.editor.currentPassword.subscribe(function () {
+                self.editor.currentPasswordMismatch(false);
             });
 
             self.requestData = function () {
@@ -144,22 +168,28 @@ $(function () {
             self.showAddUserDialog = function () {
                 if (!CONFIG_ACCESS_CONTROL) return;
 
-                self.currentUser(undefined);
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.currentUser(undefined);
 
-                $('ul.nav-pills a[data-toggle="tab"]:first', self.userEditorDialog).tab(
-                    "show"
-                );
-                self.userEditorDialog
-                    .modal({
-                        minHeight: function () {
-                            return Math.max($.fn.modal.defaults.maxHeight() - 80, 250);
-                        }
-                    })
-                    .css({
-                        "margin-left": function () {
-                            return -($(this).width() / 2);
-                        }
-                    });
+                    $(
+                        'ul.nav-pills a[data-toggle="tab"]:first',
+                        self.userEditorDialog
+                    ).tab("show");
+                    self.userEditorDialog
+                        .modal({
+                            minHeight: function () {
+                                return Math.max(
+                                    $.fn.modal.defaults.maxHeight() - 80,
+                                    250
+                                );
+                            }
+                        })
+                        .css({
+                            "margin-left": function () {
+                                return -($(this).width() / 2);
+                            }
+                        });
+                });
             };
 
             self.confirmAddUser = function () {
@@ -173,10 +203,12 @@ $(function () {
                     active: self.editor.active()
                 };
 
-                self.addUser(user).done(function () {
-                    // close dialog
-                    self.currentUser(undefined);
-                    self.userEditorDialog.modal("hide");
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.addUser(user).done(function () {
+                        // close dialog
+                        self.currentUser(undefined);
+                        self.userEditorDialog.modal("hide");
+                    });
                 });
             };
 
@@ -206,17 +238,19 @@ $(function () {
                         });
                 };
 
-                OctoPrint.users
-                    .get(user.name)
-                    .done(function (data) {
-                        process(data);
-                    })
-                    .fail(function () {
-                        log.warn(
-                            "Could not fetch current user data, proceeding with client side data copy"
-                        );
-                        process(user);
-                    });
+                access.loginState.reauthenticateIfNecessary(() => {
+                    OctoPrint.users
+                        .get(user.name)
+                        .done(function (data) {
+                            process(data);
+                        })
+                        .fail(function () {
+                            log.warn(
+                                "Could not fetch current user data, proceeding with client side data copy"
+                            );
+                            process(user);
+                        });
+                });
             };
 
             self.confirmEditUser = function () {
@@ -227,37 +261,97 @@ $(function () {
                 user.groups = self.editor.groups();
                 user.permissions = self.editor.permissions();
 
-                self.updateUser(user).done(function () {
-                    // close dialog
-                    self.currentUser(undefined);
-                    self.userEditorDialog.modal("hide");
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.updateUser(user).done(function () {
+                        // close dialog
+                        self.currentUser(undefined);
+                        self.userEditorDialog.modal("hide");
+                    });
+                });
+            };
+
+            self.confirmRemoveUser = (user) => {
+                if (!CONFIG_ACCESS_CONTROL) return;
+
+                if (user.name === access.loginState.username()) {
+                    // we do not allow to delete ourselves
+                    new PNotify({
+                        title: gettext("Not possible"),
+                        text: gettext("You may not delete your own account."),
+                        type: "error"
+                    });
+                    return $.Deferred()
+                        .reject("You may not delete your own account")
+                        .promise();
+                }
+
+                access.loginState.reauthenticateIfNecessary(() => {
+                    showConfirmationDialog({
+                        title: gettext("Are you sure?"),
+                        message: _.sprintf(
+                            gettext('You are about to delete the user "%(name)s".'),
+                            {name: _.escape(user.name)}
+                        ),
+                        proceed: gettext("Delete"),
+                        onproceed: () => {
+                            self.removeUser(user);
+                        }
+                    });
                 });
             };
 
             self.showChangePasswordDialog = function (user) {
                 if (!CONFIG_ACCESS_CONTROL) return;
 
-                self.currentUser(user);
-                self.changePasswordDialog.modal("show");
+                const proceed = () => {
+                    self.currentUser(user);
+                    self.changePasswordDialog.modal("show");
+                };
+
+                if (self.isCurrentUser(user)) {
+                    proceed();
+                } else {
+                    access.loginState.reauthenticateIfNecessary(proceed);
+                }
             };
 
             self.confirmChangePassword = function () {
                 if (!CONFIG_ACCESS_CONTROL) return;
 
-                self.updatePassword(self.currentUser().name, self.editor.password()).done(
-                    function () {
-                        // close dialog
-                        self.currentUser(undefined);
-                        self.changePasswordDialog.modal("hide");
-                    }
-                );
+                const proceed = () => {
+                    self.updatePassword(
+                        self.currentUser().name,
+                        self.editor.password(),
+                        self.editor.currentPassword()
+                    )
+                        .done(function () {
+                            // close dialog
+                            self.currentUser(undefined);
+                            self.changePasswordDialog.modal("hide");
+                        })
+                        .fail(function (xhr) {
+                            if (xhr.status === 403) {
+                                self.currentPasswordMismatch(true);
+                            }
+                        });
+                };
+
+                if (self.isCurrentUser()) {
+                    proceed();
+                } else {
+                    access.loginState.reauthenticateIfNecessary(proceed);
+                }
             };
 
             self.confirmGenerateApikey = function () {
                 if (!CONFIG_ACCESS_CONTROL) return;
 
-                self.generateApikey(self.currentUser().name).done(function (response) {
-                    self._updateApikey(response.apikey);
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.generateApikey(self.currentUser().name).done(function (
+                        response
+                    ) {
+                        self._updateApikey(response.apikey);
+                    });
                 });
             };
 
@@ -273,8 +367,10 @@ $(function () {
             self.confirmDeleteApikey = function () {
                 if (!CONFIG_ACCESS_CONTROL) return;
 
-                self.deleteApikey(self.currentUser().name).done(function () {
-                    self._updateApikey(undefined);
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.deleteApikey(self.currentUser().name).done(function () {
+                        self._updateApikey(undefined);
+                    });
                 });
             };
 
@@ -291,10 +387,16 @@ $(function () {
                 if (!user) {
                     throw OctoPrint.InvalidArgumentError("user must be set");
                 }
-                if (!access.loginState.hasPermissionKo(access.permissions.ADMIN))
+                if (!access.loginState.hasPermissionKo(access.permissions.ADMIN)) {
                     return $.Deferred()
                         .reject("You are not authorized to perform this action")
                         .promise();
+                }
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
 
                 return OctoPrint.access.users.add(user).done(self.fromResponse);
             };
@@ -303,39 +405,28 @@ $(function () {
                 if (!user) {
                     throw OctoPrint.InvalidArgumentError("user must be set");
                 }
-                if (!access.loginState.hasPermissionKo(access.permissions.ADMIN))
+                if (!access.loginState.hasPermissionKo(access.permissions.ADMIN)) {
                     return $.Deferred()
                         .reject("You are not authorized to perform this action")
                         .promise();
-
-                if (user.name === access.loginState.username()) {
-                    // we do not allow to delete ourselves
-                    new PNotify({
-                        title: gettext("Not possible"),
-                        text: gettext("You may not delete your own account."),
-                        type: "error"
-                    });
+                }
+                if (!access.loginState.credentialsSeen()) {
                     return $.Deferred()
-                        .reject("You may not delete your own account")
+                        .reject("You need to reauthenticate to perform this action")
                         .promise();
                 }
 
-                showConfirmationDialog({
-                    title: gettext("Are you sure?"),
-                    message: _.sprintf(
-                        gettext('You are about to delete the user "%(name)s".'),
-                        {name: user.name}
-                    ),
-                    proceed: gettext("Delete"),
-                    onproceed: function () {
-                        OctoPrint.access.users.delete(user.name).done(self.fromResponse);
-                    }
-                });
+                return OctoPrint.access.users.delete(user.name).done(self.fromResponse);
             };
 
             self.updateUser = function (user) {
                 if (!user) {
                     throw OctoPrint.InvalidArgumentError("user must be set");
+                }
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
                 }
 
                 return OctoPrint.access.users
@@ -349,17 +440,32 @@ $(function () {
                     .done(self.fromResponse);
             };
 
-            self.updatePassword = function (username, password) {
-                return OctoPrint.access.users.changePassword(username, password);
+            self.updatePassword = function (username, password, current) {
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
+                return OctoPrint.access.users.changePassword(username, password, current);
             };
 
             self.generateApikey = function (username) {
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
                 return OctoPrint.access.users.generateApiKey(username).done(function () {
                     self.requestData();
                 });
             };
 
             self.deleteApikey = function (username) {
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
                 return OctoPrint.access.users.resetApiKey(username);
             };
 
@@ -552,21 +658,27 @@ $(function () {
             };
 
             self.showAddGroupDialog = function () {
-                self.currentGroup(undefined);
-                $('ul.nav-pills a[data-toggle="tab"]:first', self.groupEditorDialog).tab(
-                    "show"
-                );
-                self.groupEditorDialog
-                    .modal({
-                        minHeight: function () {
-                            return Math.max($.fn.modal.defaults.maxHeight() - 80, 250);
-                        }
-                    })
-                    .css({
-                        "margin-left": function () {
-                            return -($(this).width() / 2);
-                        }
-                    });
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.currentGroup(undefined);
+                    $(
+                        'ul.nav-pills a[data-toggle="tab"]:first',
+                        self.groupEditorDialog
+                    ).tab("show");
+                    self.groupEditorDialog
+                        .modal({
+                            minHeight: function () {
+                                return Math.max(
+                                    $.fn.modal.defaults.maxHeight() - 80,
+                                    250
+                                );
+                            }
+                        })
+                        .css({
+                            "margin-left": function () {
+                                return -($(this).width() / 2);
+                            }
+                        });
+                });
             };
 
             self.confirmAddGroup = function () {
@@ -593,21 +705,27 @@ $(function () {
             self.showEditGroupDialog = function (group) {
                 if (!group.changeable) return;
 
-                self.currentGroup(group);
-                $('ul.nav-pills a[data-toggle="tab"]:first', self.groupEditorDialog).tab(
-                    "show"
-                );
-                self.groupEditorDialog
-                    .modal({
-                        minHeight: function () {
-                            return Math.max($.fn.modal.defaults.maxHeight() - 80, 250);
-                        }
-                    })
-                    .css({
-                        "margin-left": function () {
-                            return -($(this).width() / 2);
-                        }
-                    });
+                access.loginState.reauthenticateIfNecessary(() => {
+                    self.currentGroup(group);
+                    $(
+                        'ul.nav-pills a[data-toggle="tab"]:first',
+                        self.groupEditorDialog
+                    ).tab("show");
+                    self.groupEditorDialog
+                        .modal({
+                            minHeight: function () {
+                                return Math.max(
+                                    $.fn.modal.defaults.maxHeight() - 80,
+                                    250
+                                );
+                            }
+                        })
+                        .css({
+                            "margin-left": function () {
+                                return -($(this).width() / 2);
+                            }
+                        });
+                });
             };
 
             self.confirmEditGroup = function () {
@@ -629,6 +747,24 @@ $(function () {
                 });
             };
 
+            self.confirmRemoveGroup = (group) => {
+                if (!group.removable) return;
+
+                access.loginState.reauthenticateIfNecessary(() => {
+                    showConfirmationDialog({
+                        title: gettext("Are you sure?"),
+                        message: _.sprintf(
+                            gettext('You are about to delete the group "%(name)s".'),
+                            {name: _.escape(group.name)}
+                        ),
+                        proceed: gettext("Delete"),
+                        onproceed: () => {
+                            self.removeGroup(group);
+                        }
+                    });
+                });
+            };
+
             //~~ Framework
 
             self.onStartup = function () {
@@ -641,6 +777,11 @@ $(function () {
                 if (!group) {
                     throw OctoPrint.InvalidArgumentError("group must be set");
                 }
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
 
                 return OctoPrint.access.groups.add(group).done(self.fromResponse);
             };
@@ -649,30 +790,26 @@ $(function () {
                 if (!group) {
                     throw OctoPrint.InvalidArgumentError("group must be set");
                 }
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
+                }
 
-                if (!group.removable) return;
-
-                showConfirmationDialog({
-                    title: gettext("Are you sure?"),
-                    message: _.sprintf(
-                        gettext('You are about to delete the group "%(name)s".'),
-                        {name: group.name}
-                    ),
-                    proceed: gettext("Delete"),
-                    onproceed: function () {
-                        OctoPrint.access.groups
-                            .delete(group.key)
-                            .done(function (response) {
-                                self.fromResponse(response);
-                                access.users.requestData();
-                            });
-                    }
+                OctoPrint.access.groups.delete(group.key).done((response) => {
+                    self.fromResponse(response);
+                    access.users.requestData();
                 });
             };
 
             self.updateGroup = function (group) {
                 if (!group) {
                     throw OctoPrint.InvalidArgumentError("group must be set");
+                }
+                if (!access.loginState.credentialsSeen()) {
+                    return $.Deferred()
+                        .reject("You need to reauthenticate to perform this action")
+                        .promise();
                 }
 
                 return OctoPrint.access.groups.update(group).done(self.fromResponse);
@@ -843,15 +980,16 @@ $(function () {
             access.permissions.initialize();
         };
 
-        access.onUserPermissionsChanged = access.onUserLoggedIn = access.onUserLoggedOut = function (
-            user
-        ) {
-            if (access.loginState.hasPermission(access.permissions.SETTINGS)) {
-                access.groups.requestData().done(function () {
-                    access.users.requestData();
-                });
-            }
-        };
+        access.onUserPermissionsChanged =
+            access.onUserLoggedIn =
+            access.onUserLoggedOut =
+                function (user) {
+                    if (access.loginState.hasPermission(access.permissions.ADMIN)) {
+                        access.groups.requestData().done(function () {
+                            access.users.requestData();
+                        });
+                    }
+                };
     }
 
     OCTOPRINT_VIEWMODELS.push([AccessViewModel, ["loginStateViewModel"], []]);

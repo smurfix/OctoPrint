@@ -13,7 +13,8 @@ GCODE.ui = (function () {
         bedDimensions: undefined,
         onProgress: undefined,
         onModelLoaded: undefined,
-        onLayerSelected: undefined
+        onLayerSelected: undefined,
+        onFileLoaded: undefined
     };
 
     var setProgress = function (type, progress) {
@@ -49,6 +50,9 @@ GCODE.ui = (function () {
         var data = e.data;
         switch (data.cmd) {
             case "returnModel":
+                if (uiOptions["onFileLoaded"]) {
+                    uiOptions.onFileLoaded();
+                }
                 GCODE.ui.worker.postMessage({
                     cmd: "analyzeModel",
                     msg: {}
@@ -77,14 +81,9 @@ GCODE.ui = (function () {
                 switchLayer(0);
                 break;
 
-            case "returnLayer":
-                GCODE.gCodeReader.processLayerFromWorker(data.msg);
-                setProgress("loading", data.msg.progress / 2);
-                break;
-
-            case "returnMultiLayer":
-                GCODE.gCodeReader.processMultiLayerFromWorker(data.msg);
-                setProgress("loading", data.msg.progress / 2);
+            case "returnLayers":
+                GCODE.gCodeReader.processLayersFromWorker(data.msg);
+                setProgress("parsing", data.msg.progress / 2);
                 break;
 
             case "analyzeProgress":

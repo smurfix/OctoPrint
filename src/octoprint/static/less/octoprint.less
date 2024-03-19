@@ -29,7 +29,7 @@ body {
   }
 }
 
-.brand (@color, @dark, @light) when (@color = @dark) {
+.brand (@color, @dark, @light) when (@color =@dark) {
   span {
     background-image: url(../img/tentacle-20x20.png);
 
@@ -38,7 +38,8 @@ body {
     }
   }
 }
-.brand (@color, @dark, @light) when (@color = @light) {
+
+.brand (@color, @dark, @light) when (@color =@light) {
   span {
     background-image: url(../img/tentacle-20x20-light.png);
 
@@ -101,6 +102,7 @@ body {
       // invert for dropdown
       .navbar-background-color(fade(@bottom, @gradientalpha), fade(@top, @gradientalpha), @image);
     }
+
     > li > a:hover {
       // darken for hover
       @darkenedTop: darken(@top, 5%);
@@ -126,6 +128,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.orange {
     @base: #f27728;
     .navbar-inner-color(@base);
@@ -134,6 +137,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.yellow {
     @base: #f2de28;
     .navbar-inner-color(@base);
@@ -142,6 +146,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.green {
     @base: #77ff28;
     .navbar-inner-color(@base);
@@ -150,6 +155,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.blue {
     @base: #04c;
     .navbar-inner-color(@base);
@@ -158,6 +164,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.violet {
     @base: #7728ff;
     .navbar-inner-color(@base);
@@ -166,6 +173,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.black {
     @base: #383838;
     .navbar-inner-color(@base);
@@ -174,6 +182,7 @@ body {
       .navbar-inner-color(@base, 60%, "../img/trans-background.png");
     }
   }
+
   &.white {
     @base: #eeeeee;
     .navbar-inner-color(@base);
@@ -318,6 +327,7 @@ table {
     &.timelapse_files_checkbox,
     &.timelapse_unrendered_checkbox {
       text-align: center;
+      vertical-align: middle;
       width: 10px;
 
       input[type="checkbox"] {
@@ -325,10 +335,72 @@ table {
       }
     }
 
-    &.timelapse_files_name,
     &.timelapse_unrendered_name {
       text-overflow: ellipsis;
       text-align: left;
+    }
+
+    &.timelapse_files_details {
+      .name {
+        text-overflow: ellipsis;
+        text-align: left;
+        margin: 0 0 0 0;
+      }
+
+      .detail {
+        text-overflow: ellipsis;
+        text-align: left;
+        margin: 0 0 0 0;
+        font-size: 85%;
+        color: #999;
+      }
+    }
+
+    &.timelapse_files_thumb {
+      @thumb-size: 110px;
+      @thumb-corner: 3px;
+      width: @thumb-size;
+      position: relative;
+
+      .thumb {
+        width: @thumb-size;
+        height: calc(@thumb-size * 9 / 16);
+        border-radius: @thumb-corner;
+        background-color: rgb(238, 238, 238);
+        position: relative;
+
+        &.letterbox {
+          background-color: #000;
+        }
+
+        img {
+          max-width: 100%;
+          max-height: 100%;
+          border-radius: @thumb-corner;
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+        }
+
+        a {
+          background-image: url(/static/img/play.svg);
+          background-position: center;
+          background-repeat: no-repeat;
+          background-size: 32px 32px;
+          width: 100%;
+          height: 100%;
+          opacity: 0.8;
+          position: absolute;
+          top: 0;
+          left: 0;
+          content: "";
+
+          &:hover {
+            opacity: 1;
+          }
+        }
+      }
     }
 
     &.timelapse_files_size {
@@ -349,7 +421,15 @@ table {
     &.timelapse_files_action,
     &.timelapse_unrendered_action {
       width: 60px;
+      position: relative;
+
       .actioncol;
+
+      .btn-group {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+      }
     }
 
     // user settings
@@ -503,6 +583,38 @@ table {
   }
 }
 
+.temperature-mark-label {
+  position: absolute;
+  color: white;
+  background-color: #aeb6bf;
+  padding: 0 5px;
+  font-size: 8px;
+  transform-origin: 0 0;
+  transform: rotate(-90deg);
+}
+
+.temperature-mark-type-print {
+  background-color: #218656;
+}
+.temperature-mark-type-pause {
+  background-color: #fdc02f;
+}
+.temperature-mark-type-resume {
+  background-color: #27caee;
+}
+.temperature-mark-type-cancel {
+  background-color: #da3749;
+}
+.temperature-mark-type-done {
+  background-color: #1b72f9;
+}
+.temperature-mark-type-connected {
+  background-color: #666666;
+}
+.temperature-mark-type-disconnected {
+  background-color: #333333;
+}
+
 /** Various */
 
 .tab-content,
@@ -584,23 +696,95 @@ ul.dropdown-menu li a {
 }
 
 /** Webcam */
+#webcam_plugins_container {
+  @overlay-color: rgba(0, 0, 0, 0.5);
+  @side-padding: 5px;
+  @border-radius: 5px;
 
-#webcam_container {
-  width: 100%;
   position: relative;
-  outline: none;
+  border-radius: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  min-height: 300px;
+  min-width: 100%;
+  background-color: #000;
 
-  background-color: black;
+  .tab-content {
+    border: none;
+    padding: 0px;
+  }
+
+  &:hover .nav,
+  &:hover .refresh_overlay,
+  &:hover .keycontrol_overlay {
+    opacity: 1;
+  }
+
+  .nav {
+    position: absolute;
+    padding: @side-padding;
+    right: @side-padding;
+    top: @side-padding;
+    border-radius: @border-radius;
+    background: @overlay-color;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
+
+    .nav-item a {
+      text-align: end;
+      padding: @side-padding;
+      margin-bottom: 1px;
+      border-radius: @border-radius;
+      color: white;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+      }
+    }
+
+    .active {
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: @border-radius;
+      color: white;
+    }
+  }
+
+  .refresh_overlay {
+    position: absolute;
+    padding: @side-padding;
+    left: @side-padding;
+    top: @side-padding;
+    border-radius: @border-radius;
+    background: @overlay-color;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
+
+    a {
+      padding: @side-padding;
+      border-radius: @border-radius;
+      color: white;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: white;
+      }
+    }
+  }
 
   .keycontrol_overlay {
     position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
-    background: rgba(0, 0, 0, 0.5);
+    left: @side-padding;
+    right: @side-padding;
+    bottom: @side-padding;
+    border-radius: @border-radius;
+    overflow: hidden;
+    background: @overlay-color;
     font-size: 85%;
     color: white;
     padding: 0;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
 
     kbd {
       border: 1px solid #eeeeee;
@@ -625,94 +809,6 @@ ul.dropdown-menu li a {
       float: left;
     }
   }
-
-  .nowebcam {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-
-    .text {
-      color: white;
-      text-align: center;
-      position: relative;
-      margin: auto;
-      width: 80%;
-      top: 50%;
-      transform: translateY(-50%);
-      display: block;
-
-      &.webcam_loading {
-        animation: pulsate 3s ease-out;
-        animation-iteration-count: infinite;
-      }
-    }
-  }
-
-  .webcam_rotated {
-    position: relative;
-    width: 100%;
-    padding-bottom: 100%;
-    pointer-events: none;
-
-    .webcam_fixed_ratio {
-      position: absolute;
-      transform: rotate(-90deg);
-      top: 0;
-      bottom: 0;
-      pointer-events: none;
-
-      .webcam_fixed_ratio_inner {
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-      }
-    }
-  }
-
-  .webcam_unrotated {
-    .webcam_fixed_ratio {
-      width: 100%;
-      pointer-events: none;
-
-      padding-bottom: 100%;
-      &.ratio43 {
-        padding-bottom: 75%;
-      }
-
-      &.ratio169 {
-        padding-bottom: 56.25%;
-      }
-
-      &.ratio1610 {
-        padding-bottom: 62.5%;
-      }
-
-      position: relative;
-
-      .webcam_fixed_ratio_inner {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        pointer-events: none;
-      }
-    }
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-}
-// Predict height of webcam test container for modal positioning
-// height is 3/4 the fixed modal width, for 4:3 webcam stream.
-// Yes it's hardcoded, but so is the modal width.
-#webcamTestContainer {
-  min-height: 384px;
 }
 
 /** State sidebar panel */
@@ -735,6 +831,7 @@ ul.dropdown-menu li a {
       overflow-y: scroll;
       height: 306px;
       padding-right: 2px;
+      position: relative; // required for correct offsetParent, see #4680
     }
 
     .entry {
@@ -751,6 +848,7 @@ ul.dropdown-menu li a {
         text-overflow: ellipsis;
         word-break: break-all;
         margin-right: 30px;
+        white-space: pre-wrap;
       }
 
       .toggleAdditionalData {
@@ -783,10 +881,12 @@ ul.dropdown-menu li a {
       }
 
       @highlight-color: yellow;
+
       @keyframes highlightframes {
         0% {
           background: @highlight-color;
         }
+
         100% {
           background: transparent;
         }
@@ -800,6 +900,7 @@ ul.dropdown-menu li a {
     .back {
       .back-path {
         white-space: nowrap;
+
         span {
           word-wrap: break-word;
           white-space: pre-line;
@@ -906,9 +1007,11 @@ ul.dropdown-menu li a {
     0% {
       color: @gray;
     }
+
     50% {
       color: fade(@gray, 20%);
     }
+
     100% {
       color: @gray;
     }
@@ -978,6 +1081,7 @@ ul.dropdown-menu li a {
 
 #about_sponsors {
   @sponsorCols: 3;
+
   ul {
     columns: @sponsorCols;
     -webkit-columns: @sponsorCols;
@@ -987,10 +1091,33 @@ ul.dropdown-menu li a {
 
 #about_authors {
   @authorCols: 3;
+
   ul {
     columns: @authorCols;
     -webkit-columns: @authorCols;
     -moz-columns: @authorCols;
+  }
+}
+
+.funding-banner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 1em;
+  height: 60px;
+
+  border-top: 1px solid #85ba80;
+  border-bottom: 1px solid #85ba80;
+  background-color: #85ba8066;
+
+  .banner-icon {
+    flex-shrink: 0;
+  }
+
+  .banner-text {
+    flex-grow: 1;
+    font-size: 1em;
+    margin: 0 0 0 1.5em;
   }
 }
 
@@ -1007,6 +1134,7 @@ ul.dropdown-menu li a {
       display: inline;
       margin-left: 1em;
       font-size: 85%;
+
       a {
         color: #555;
       }
@@ -1028,13 +1156,16 @@ ul.dropdown-menu li a {
 .ui-pnotify .alert a {
   color: #c09853;
 }
+
 .ui-pnotify .alert-error a,
 .ui-pnotify .alert-danger a {
   color: #b94a48;
 }
+
 .ui-pnotify .alert-success a {
   color: #468847;
 }
+
 .ui-pnotify .alert-info a {
   color: #3a87ad;
 }
@@ -1086,9 +1217,11 @@ textarea.block {
   0% {
     opacity: 0.5;
   }
+
   50% {
     opacity: 1;
   }
+
   100% {
     opacity: 0.5;
   }
@@ -1280,7 +1413,7 @@ textarea.block {
     background-color: @wellBackground;
     border: 1px solid darken(@wellBackground, 7%);
     .border-radius(@baseBorderRadius);
-    .box-shadow(inset 0 1px 1px rgba(0,0,0,0.05));
+    .box-shadow(inset 0 1px 1px rgba(0, 0, 0, 0.05));
   }
 
   &.slider-disabled .slider-track {
@@ -1352,10 +1485,12 @@ _:future,
     width: 10px;
     height: 10px;
   }
+
   ::-webkit-scrollbar-track {
     border-radius: 10px;
     -webkit-border-radius: 10px;
   }
+
   ::-webkit-scrollbar-thumb {
     -webkit-border-radius: 10px;
     border-radius: 10px;
@@ -1402,6 +1537,14 @@ _:future,
   }
 }
 
+label.checkbox,
+label.radio {
+  input[type="radio"],
+  input[type="checkbox"] {
+    margin-top: 2px;
+  }
+}
+
 // block level inputs with add-ons
 //
 // LESS based on CSS from https://stackoverflow.com/a/17466199/2028598
@@ -1416,12 +1559,15 @@ _:future,
 
     .add-on {
       display: table-cell;
-      width: 1%; /* remove this if you want default bootstrap button width */
+      width: 1%;
+      /* remove this if you want default bootstrap button width */
     }
 
     > input {
-      box-sizing: border-box; /* use bootstrap mixin or include vendor variants */
-      display: table; /* table-cell is not working well in Chrome for small widths */
+      box-sizing: border-box;
+      /* use bootstrap mixin or include vendor variants */
+      display: table;
+      /* table-cell is not working well in Chrome for small widths */
       min-height: inherit;
       width: 100%;
     }
@@ -1457,6 +1603,7 @@ input[type="number"].input-nospin::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
 input[type="number"].input-nospin {
   -moz-appearance: textfield;
 }
@@ -1483,11 +1630,13 @@ textarea.monospace {
 
 .progress-text-centered {
   position: relative;
+
   .bar {
     z-index: 1;
     position: absolute;
     overflow: hidden;
   }
+
   .progress-text-front,
   .progress-text-back {
     position: absolute;
@@ -1500,6 +1649,7 @@ textarea.monospace {
     font-size: 12px;
     line-height: 20px;
   }
+
   .progress-text-front {
     color: #fff;
   }
@@ -1649,6 +1799,7 @@ textarea.monospace {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -1658,6 +1809,7 @@ textarea.monospace {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 0.7;
   }

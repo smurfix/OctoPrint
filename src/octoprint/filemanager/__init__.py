@@ -1,21 +1,17 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
-import io
 import logging
 import os
+import time
 from collections import namedtuple
-
-from past.builtins import basestring
 
 import octoprint.plugin
 import octoprint.util
 from octoprint.events import Events, eventManager
 from octoprint.util import get_fully_qualified_classname as fqcn
+from octoprint.util import yaml
 
 from .analysis import AnalysisQueue, QueueEntry  # noqa: F401
 from .destinations import FileDestinations  # noqa: F401
@@ -184,19 +180,19 @@ def get_content_type_mapping_for_extension(extension, subtree=None):
     return None
 
 
-def valid_extension(extension, type=None):
+def valid_extension(extension, type=None, tree=None):
     if not type:
-        return extension in get_all_extensions()
+        return extension in get_all_extensions(subtree=tree)
     else:
-        extensions = get_extensions(type)
+        extensions = get_extensions(type, subtree=tree)
         if extensions:
             return extension in extensions
 
 
-def valid_file_type(filename, type=None):
+def valid_file_type(filename, type=None, tree=None):
     _, extension = os.path.splitext(filename)
     extension = extension[1:].lower()
-    return valid_extension(extension, type=type)
+    return valid_extension(extension, type=type, tree=tree)
 
 
 def get_file_type(filename):
@@ -223,7 +219,7 @@ class NoSuchStorage(Exception):
     pass
 
 
-class FileManager(object):
+class FileManager:
     def __init__(
         self,
         analysis_queue,
@@ -273,9 +269,7 @@ class FileManager(object):
 
         def worker():
             self._logger.info(
-                "Adding backlog items from all storage types to analysis queue...".format(
-                    **locals()
-                )
+                "Adding backlog items from all storage types to analysis queue..."
             )
             for storage_type, storage_manager in self._storage_managers.items():
                 self._determine_analysis_backlog(storage_type, storage_manager)
@@ -332,15 +326,11 @@ class FileManager(object):
 
         if root:
             self._logger.info(
-                'Added {counter} items from storage type "{storage_type}" and root "{root}" to analysis queue'.format(
-                    **locals()
-                )
+                f'Added {counter} items from storage type "{storage_type}" and root "{root}" to analysis queue'
             )
         else:
             self._logger.info(
-                'Added {counter} items from storage type "{storage_type}" to analysis queue'.format(
-                    **locals()
-                )
+                f'Added {counter} items from storage type "{storage_type}" to analysis queue'
             )
 
     def add_storage(self, storage_type, storage_manager):
@@ -456,9 +446,9 @@ class FileManager(object):
                     file_obj = StreamWrapper(
                         os.path.basename(dest_path),
                         io.BytesIO(
-                            ";Generated from {stl_name} (hash: {hash})\n".format(
-                                **locals()
-                            ).encode("ascii", "replace")
+                            f";Generated from {stl_name} (hash: {hash})\n".encode(
+                                "ascii", "replace"
+                            )
                         ),
                         io.FileIO(tmp_path, "rb"),
                     )
@@ -477,7 +467,7 @@ class FileManager(object):
                         analysis=_analysis,
                     )
 
-                    end_time = octoprint.util.monotonic_time()
+                    end_time = time.monotonic()
                     eventManager().fire(
                         Events.SLICING_DONE,
                         {
@@ -508,7 +498,7 @@ class FileManager(object):
 
         slicer = self._slicing_manager.get_slicer(slicer_name)
 
-        start_time = octoprint.util.monotonic_time()
+        start_time = time.monotonic()
         eventManager().fire(
             Events.SLICING_STARTED,
             {
@@ -671,21 +661,21 @@ class FileManager(object):
 
     def list_files(
         self,
-        destinations=None,
+        locations=None,
         path=None,
         filter=None,
         recursive=None,
         level=0,
         force_refresh=False,
     ):
-        if not destinations:
-            destinations = list(self._storage_managers.keys())
-        if isinstance(destinations, basestring):
-            destinations = [destinations]
+        if not locations:
+            locations = list(self._storage_managers.keys())
+        if isinstance(locations, str):
+            locations = [locations]
 
         result = {}
-        for dst in destinations:
-            result[dst] = self._storage_managers[dst].list_files(
+        for loc in locations:
+            result[loc] = self._storage_managers[loc].list_files(
                 path=path,
                 filter=filter,
                 recursive=recursive,
@@ -696,7 +686,7 @@ class FileManager(object):
 
     def add_file(
         self,
-        destination,
+        location,
         path,
         file_object,
         links=None,
@@ -708,10 +698,12 @@ class FileManager(object):
         if printer_profile is None:
             printer_profile = self._printer_profile_manager.get_current_or_default()
 
+        path_in_storage = self._storage(location).path_in_storage(path)
+
         for name, hook in self._preprocessor_hooks.items():
             try:
                 hook_file_object = hook(
-                    path,
+                    path_in_storage,
                     file_object,
                     links=links,
                     printer_profile=printer_profile,
@@ -729,13 +721,12 @@ class FileManager(object):
             if hook_file_object is not None:
                 file_object = hook_file_object
 
-        queue_entry = self._analysis_queue_entry(destination, path)
-
+        queue_entry = self._analysis_queue_entry(location, path_in_storage)
         if queue_entry is not None:
             self._analysis_queue.dequeue(queue_entry)
 
-        path_in_storage = self._storage(destination).add_file(
-            path,
+        path_in_storage = self._storage(location).add_file(
+            path_in_storage,
             file_object,
             links=links,
             printer_profile=printer_profile,
@@ -744,7 +735,7 @@ class FileManager(object):
         )
 
         queue_entry = self._analysis_queue_entry(
-            destination,
+            location,
             path_in_storage,
             printer_profile=printer_profile,
             analysis=analysis,
@@ -752,168 +743,210 @@ class FileManager(object):
         if queue_entry:
             self._analysis_queue.enqueue(queue_entry, high_priority=True)
 
-        _, name = self._storage(destination).split_path(path_in_storage)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
             Events.FILE_ADDED,
             {
-                "storage": destination,
+                "storage": location,
                 "path": path_in_storage,
                 "name": name,
                 "type": get_file_type(name),
+                "operation": "add",
             },
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
         return path_in_storage
 
-    def remove_file(self, destination, path):
-        queue_entry = self._analysis_queue_entry(destination, path)
+    def remove_file(self, location, path):
+        path_in_storage = self._storage(location).path_in_storage(path)
+        queue_entry = self._analysis_queue_entry(location, path_in_storage)
         self._analysis_queue.dequeue(queue_entry)
-        self._storage(destination).remove_file(path)
+        self._storage(location).remove_file(path_in_storage)
 
-        _, name = self._storage(destination).split_path(path)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
             Events.FILE_REMOVED,
             {
-                "storage": destination,
+                "storage": location,
                 "path": path,
                 "name": name,
                 "type": get_file_type(name),
+                "operation": "remove",
             },
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def copy_file(self, destination, source, dst):
-        path_in_storage = self._storage(destination).copy_file(source, dst)
-        if not self.has_analysis(destination, path_in_storage):
-            queue_entry = self._analysis_queue_entry(destination, path_in_storage)
+    def copy_file(self, location, source, destination):
+        path_in_storage = self._storage(location).copy_file(source, destination)
+        if not self.has_analysis(location, path_in_storage):
+            queue_entry = self._analysis_queue_entry(location, path_in_storage)
             if queue_entry:
                 self._analysis_queue.enqueue(queue_entry)
 
-        _, name = self._storage(destination).split_path(path_in_storage)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
             Events.FILE_ADDED,
             {
-                "storage": destination,
+                "storage": location,
                 "path": path_in_storage,
                 "name": name,
                 "type": get_file_type(name),
+                "operation": "copy",
             },
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def move_file(self, destination, source, dst):
-        queue_entry = self._analysis_queue_entry(destination, source)
+    def move_file(self, location, source, destination):
+        source_in_storage = self._storage(location).path_in_storage(source)
+        destination_in_storage = self._storage(location).path_in_storage(destination)
+
+        queue_entry = self._analysis_queue_entry(location, source_in_storage)
         self._analysis_queue.dequeue(queue_entry)
-        path = self._storage(destination).move_file(source, dst)
-        if not self.has_analysis(destination, path):
-            queue_entry = self._analysis_queue_entry(destination, path)
+        path = self._storage(location).move_file(
+            source_in_storage, destination_in_storage
+        )
+        if not self.has_analysis(location, path):
+            queue_entry = self._analysis_queue_entry(location, path)
             if queue_entry:
                 self._analysis_queue.enqueue(queue_entry)
 
-        source_path_in_storage = self._storage(destination).path_in_storage(source)
-        _, source_name = self._storage(destination).split_path(source_path_in_storage)
-        dst_path_in_storage = self._storage(destination).path_in_storage(dst)
-        _, dst_name = self._storage(destination).split_path(dst_path_in_storage)
+        _, source_name = self._storage(location).split_path(source_in_storage)
+        _, destination_name = self._storage(location).split_path(destination_in_storage)
 
         eventManager().fire(
             Events.FILE_REMOVED,
             {
-                "storage": destination,
-                "path": source_path_in_storage,
+                "storage": location,
+                "path": source_in_storage,
                 "name": source_name,
                 "type": get_file_type(source_name),
+                "operation": "move",
             },
         )
         eventManager().fire(
             Events.FILE_ADDED,
             {
-                "storage": destination,
-                "path": dst_path_in_storage,
-                "name": dst_name,
-                "type": get_file_type(dst_name),
+                "storage": location,
+                "path": destination_in_storage,
+                "name": destination_name,
+                "type": get_file_type(destination_name),
+                "operation": "move",
             },
         )
+        eventManager().fire(
+            Events.FILE_MOVED,
+            {
+                "storage": location,
+                "source_path": source_in_storage,
+                "source_name": source_name,
+                "source_type": get_file_type(source_name),
+                "destination_path": destination_in_storage,
+                "destination_name": destination_name,
+                "destination_type": get_file_type(destination_name),
+            },
+        )
+
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def add_folder(self, destination, path, ignore_existing=True, display=None):
-        path_in_storage = self._storage(destination).add_folder(
+    def add_folder(self, location, path, ignore_existing=True, display=None):
+        path_in_storage = self._storage(location).add_folder(
             path, ignore_existing=ignore_existing, display=display
         )
 
-        _, name = self._storage(destination).split_path(path_in_storage)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
             Events.FOLDER_ADDED,
-            {"storage": destination, "path": path_in_storage, "name": name},
+            {"storage": location, "path": path_in_storage, "name": name},
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
         return path_in_storage
 
-    def remove_folder(self, destination, path, recursive=True):
-        self._analysis_queue.dequeue_folder(destination, path)
+    def remove_folder(self, location, path, recursive=True):
+        path_in_storage = self._storage(location).path_in_storage(path)
+
+        self._analysis_queue.dequeue_folder(location, path_in_storage)
         self._analysis_queue.pause()
-        self._storage(destination).remove_folder(path, recursive=recursive)
+        self._storage(location).remove_folder(path_in_storage, recursive=recursive)
         self._analysis_queue.resume()
 
-        _, name = self._storage(destination).split_path(path)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
-            Events.FOLDER_REMOVED, {"storage": destination, "path": path, "name": name}
+            Events.FOLDER_REMOVED,
+            {"storage": location, "path": path_in_storage, "name": name},
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def copy_folder(self, destination, source, dst):
-        path_in_storage = self._storage(destination).copy_folder(source, dst)
+    def copy_folder(self, location, source, destination):
+        path_in_storage = self._storage(location).copy_folder(source, destination)
         self._determine_analysis_backlog(
-            destination, self._storage(destination), root=path_in_storage
+            location, self._storage(location), root=path_in_storage
         )
 
-        _, name = self._storage(destination).split_path(path_in_storage)
+        _, name = self._storage(location).split_path(path_in_storage)
         eventManager().fire(
             Events.FOLDER_ADDED,
-            {"storage": destination, "path": path_in_storage, "name": name},
+            {"storage": location, "path": path_in_storage, "name": name},
         )
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def move_folder(self, destination, source, dst):
-        self._analysis_queue.dequeue_folder(destination, source)
+    def move_folder(self, location, source, destination):
+        source_in_storage = self._storage(location).path_in_storage(source)
+        destination_in_storage = self._storage(location).path_in_storage(destination)
+
+        self._analysis_queue.dequeue_folder(location, source_in_storage)
         self._analysis_queue.pause()
-        dst_path_in_storage = self._storage(destination).move_folder(source, dst)
+        destination_in_storage = self._storage(location).move_folder(
+            source_in_storage, destination_in_storage
+        )
         self._determine_analysis_backlog(
-            destination, self._storage(destination), root=dst_path_in_storage
+            location, self._storage(location), root=destination_in_storage
         )
         self._analysis_queue.resume()
 
-        source_path_in_storage = self._storage(destination).path_in_storage(source)
-        _, source_name = self._storage(destination).split_path(source_path_in_storage)
-        _, dst_name = self._storage(destination).split_path(dst_path_in_storage)
+        _, source_name = self._storage(location).split_path(source_in_storage)
+        _, destination_name = self._storage(location).split_path(destination_in_storage)
 
         eventManager().fire(
             Events.FOLDER_REMOVED,
-            {"storage": destination, "path": source_path_in_storage, "name": source_name},
+            {"storage": location, "path": source_in_storage, "name": source_name},
         )
         eventManager().fire(
             Events.FOLDER_ADDED,
-            {"storage": destination, "path": dst_path_in_storage, "name": dst_name},
+            {
+                "storage": location,
+                "path": destination_in_storage,
+                "name": destination_name,
+            },
         )
+        eventManager().fire(
+            Events.FOLDER_MOVED,
+            {
+                "storage": location,
+                "source_path": source_in_storage,
+                "source_name": source_name,
+                "destination_path": destination_in_storage,
+                "destination_name": destination_name,
+            },
+        )
+
         eventManager().fire(Events.UPDATED_FILES, {"type": "printables"})
 
-    def has_analysis(self, destination, path):
-        return self._storage(destination).has_analysis(path)
+    def has_analysis(self, location, path):
+        return self._storage(location).has_analysis(path)
 
-    def get_metadata(self, destination, path):
-        return self._storage(destination).get_metadata(path)
+    def get_metadata(self, location, path):
+        return self._storage(location).get_metadata(path)
 
-    def add_link(self, destination, path, rel, data):
-        self._storage(destination).add_link(path, rel, data)
+    def add_link(self, location, path, rel, data):
+        self._storage(location).add_link(path, rel, data)
 
-    def remove_link(self, destination, path, rel, data):
-        self._storage(destination).remove_link(path, rel, data)
+    def remove_link(self, location, path, rel, data):
+        self._storage(location).remove_link(path, rel, data)
 
-    def log_print(
-        self, destination, path, timestamp, print_time, success, printer_profile
-    ):
+    def log_print(self, location, path, timestamp, print_time, success, printer_profile):
         try:
             if success:
-                self._storage(destination).add_history(
+                self._storage(location).add_history(
                     path,
                     {
                         "timestamp": timestamp,
@@ -923,7 +956,7 @@ class FileManager(object):
                     },
                 )
             else:
-                self._storage(destination).add_history(
+                self._storage(location).add_history(
                     path,
                     {
                         "timestamp": timestamp,
@@ -932,33 +965,29 @@ class FileManager(object):
                     },
                 )
             eventManager().fire(
-                Events.METADATA_STATISTICS_UPDATED, {"storage": destination, "path": path}
+                Events.METADATA_STATISTICS_UPDATED, {"storage": location, "path": path}
             )
         except NoSuchStorage:
             # if there's no storage configured where to log the print, we'll just not log it
             pass
 
-    def save_recovery_data(self, origin, path, pos):
+    def save_recovery_data(self, location, path, pos):
         import time
-
-        import yaml
 
         from octoprint.util import atomic_write
 
         data = {
-            "origin": origin,
-            "path": self.path_in_storage(origin, path),
+            "origin": location,
+            "path": self.path_in_storage(location, path),
             "pos": pos,
             "date": time.time(),
         }
         try:
             with atomic_write(self._recovery_file, mode="wt", max_permissions=0o666) as f:
-                yaml.safe_dump(
-                    data, stream=f, default_flow_style=False, indent=2, allow_unicode=True
-                )
+                yaml.save_to_file(data, file=f, pretty=True)
         except Exception:
             self._logger.exception(
-                "Could not write recovery data to file {}".format(self._recovery_file)
+                f"Could not write recovery data to file {self._recovery_file}"
             )
 
     def delete_recovery_data(self):
@@ -969,18 +998,16 @@ class FileManager(object):
             os.remove(self._recovery_file)
         except Exception:
             self._logger.exception(
-                "Error deleting recovery data file {}".format(self._recovery_file)
+                f"Error deleting recovery data file {self._recovery_file}"
             )
 
     def get_recovery_data(self):
         if not os.path.isfile(self._recovery_file):
             return None
 
-        import yaml
-
         try:
-            with io.open(self._recovery_file, "rt", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+            data = yaml.load_from_file(path=self._recovery_file)
+
             if not isinstance(data, dict) or not all(
                 map(lambda x: x in data, ("origin", "path", "pos", "date"))
             ):
@@ -988,85 +1015,82 @@ class FileManager(object):
             return data
         except Exception:
             self._logger.exception(
-                "Could not read recovery data from file {}".format(self._recovery_file)
+                f"Could not read recovery data from file {self._recovery_file}"
             )
             self.delete_recovery_data()
 
-    def get_additional_metadata(self, destination, path, key):
-        self._storage(destination).get_additional_metadata(path, key)
+    def get_additional_metadata(self, location, path, key):
+        self._storage(location).get_additional_metadata(path, key)
 
     def set_additional_metadata(
-        self, destination, path, key, data, overwrite=False, merge=False
+        self, location, path, key, data, overwrite=False, merge=False
     ):
-        self._storage(destination).set_additional_metadata(
+        self._storage(location).set_additional_metadata(
             path, key, data, overwrite=overwrite, merge=merge
         )
 
-    def remove_additional_metadata(self, destination, path, key):
-        self._storage(destination).remove_additional_metadata(path, key)
+    def remove_additional_metadata(self, location, path, key):
+        self._storage(location).remove_additional_metadata(path, key)
 
-    def path_on_disk(self, destination, path):
-        return self._storage(destination).path_on_disk(path)
+    def path_on_disk(self, location, path):
+        return self._storage(location).path_on_disk(path)
 
-    def canonicalize(self, destination, path):
-        return self._storage(destination).canonicalize(path)
+    def canonicalize(self, location, path):
+        return self._storage(location).canonicalize(path)
 
-    def sanitize(self, destination, path):
-        return self._storage(destination).sanitize(path)
+    def sanitize(self, location, path):
+        return self._storage(location).sanitize(path)
 
-    def sanitize_name(self, destination, name):
-        return self._storage(destination).sanitize_name(name)
+    def sanitize_name(self, location, name):
+        return self._storage(location).sanitize_name(name)
 
-    def sanitize_path(self, destination, path):
-        return self._storage(destination).sanitize_path(path)
+    def sanitize_path(self, location, path):
+        return self._storage(location).sanitize_path(path)
 
-    def split_path(self, destination, path):
-        return self._storage(destination).split_path(path)
+    def split_path(self, location, path):
+        return self._storage(location).split_path(path)
 
-    def join_path(self, destination, *path):
-        return self._storage(destination).join_path(*path)
+    def join_path(self, location, *path):
+        return self._storage(location).join_path(*path)
 
-    def path_in_storage(self, destination, path):
-        return self._storage(destination).path_in_storage(path)
+    def path_in_storage(self, location, path):
+        return self._storage(location).path_in_storage(path)
 
-    def last_modified(self, destination, path=None, recursive=False):
-        return self._storage(destination).last_modified(path=path, recursive=recursive)
+    def last_modified(self, location, path=None, recursive=False):
+        return self._storage(location).last_modified(path=path, recursive=recursive)
 
-    def _storage(self, destination):
-        if destination not in self._storage_managers:
-            raise NoSuchStorage(
-                "No storage configured for destination {destination}".format(**locals())
-            )
-        return self._storage_managers[destination]
+    def _storage(self, location):
+        if location not in self._storage_managers:
+            raise NoSuchStorage(f"No storage configured for destination {location}")
+        return self._storage_managers[location]
 
-    def _add_analysis_result(self, destination, path, result):
-        if destination not in self._storage_managers:
+    def _add_analysis_result(self, location, path, result):
+        if location not in self._storage_managers:
             return
         if not result:
             return
 
-        storage_manager = self._storage_managers[destination]
+        storage_manager = self._storage_managers[location]
         storage_manager.set_additional_metadata(path, "analysis", result, overwrite=True)
 
     def _on_analysis_finished(self, entry, result):
         self._add_analysis_result(entry.location, entry.path, result)
 
-    def _analysis_queue_entry(
-        self, destination, path, printer_profile=None, analysis=None
-    ):
+    def _analysis_queue_entry(self, location, path, printer_profile=None, analysis=None):
         if printer_profile is None:
             printer_profile = self._printer_profile_manager.get_current_or_default()
 
-        absolute_path = self._storage(destination).path_on_disk(path)
-        _, file_name = self._storage(destination).split_path(path)
+        path_in_storage = self._storage(location).path_in_storage(path)
+        absolute_path = self._storage(location).path_on_disk(path)
+        _, file_name = self._storage(location).split_path(path)
         file_type = get_file_type(absolute_path)
 
         if file_type:
             return QueueEntry(
                 file_name,
-                path,
+                path_in_storage,
                 file_type[-1],
-                destination,
+                location,
                 absolute_path,
                 printer_profile,
                 analysis,

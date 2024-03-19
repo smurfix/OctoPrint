@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
@@ -11,11 +8,10 @@ from flask_babel import gettext
 
 import octoprint.plugin
 from octoprint.access import ADMIN_GROUP, USER_GROUP
-from octoprint.util import to_native_str
 
 
 # noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class ServerCommandsSubwizard(object):
+class ServerCommandsSubwizard:
     def _is_servercommands_wizard_firstrunonly(self):
         return True
 
@@ -42,26 +38,7 @@ class ServerCommandsSubwizard(object):
 
 
 # noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class WebcamSubwizard(object):
-    def _is_webcam_wizard_firstrunonly(self):
-        return True
-
-    def _is_webcam_wizard_required(self):
-        webcam_snapshot_url = self._settings.global_get(["webcam", "snapshot"])
-        webcam_stream_url = self._settings.global_get(["webcam", "stream"])
-        ffmpeg_path = self._settings.global_get(["webcam", "ffmpeg"])
-
-        return not (webcam_snapshot_url and webcam_stream_url and ffmpeg_path)
-
-    def _get_webcam_wizard_details(self):
-        return {"required": self._is_webcam_wizard_required()}
-
-    def _get_webcam_wizard_name(self):
-        return gettext("Webcam & Timelapse")
-
-
-# noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class AclSubwizard(object):
+class AclSubwizard:
     def _is_acl_wizard_firstrunonly(self):
         return False
 
@@ -89,7 +66,7 @@ class AclSubwizard(object):
         ):
             abort(404)
 
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if data is None:
             data = request.values
 
@@ -113,7 +90,7 @@ class AclSubwizard(object):
 
 
 # noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class OnlineCheckSubwizard(object):
+class OnlineCheckSubwizard:
     def _is_onlinecheck_wizard_firstrunonly(self):
         return False
 
@@ -131,7 +108,7 @@ class OnlineCheckSubwizard(object):
 
 
 # noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class PluginBlacklistSubwizard(object):
+class PluginBlacklistSubwizard:
     def _is_pluginblacklist_wizard_firstrunonly(self):
         return False
 
@@ -149,7 +126,7 @@ class PluginBlacklistSubwizard(object):
 
 
 # noinspection PyUnresolvedReferences,PyMethodMayBeStatic
-class PrinterProfileSubwizard(object):
+class PrinterProfileSubwizard:
     def _is_printerprofile_wizard_firstrunonly(self):
         return True
 
@@ -167,7 +144,7 @@ class PrinterProfileSubwizard(object):
 
 
 Subwizards = type(
-    to_native_str("Subwizards"),
+    "Subwizards",
     tuple(
         cls
         for clsname, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass)

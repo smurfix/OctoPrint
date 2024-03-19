@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import logging
+import re
 import threading
 import time
 
@@ -23,10 +21,11 @@ import octoprint.vendor.sockjs.tornado.session
 import octoprint.vendor.sockjs.tornado.util
 from octoprint.access.groups import GroupChangeListener
 from octoprint.access.permissions import Permissions
-from octoprint.access.users import LoginStatusListener
+from octoprint.access.users import LoginStatusListener, SessionUser
 from octoprint.events import Events
 from octoprint.settings import settings
-from octoprint.util.json import dump as json_dump
+from octoprint.util import RepeatedTimer
+from octoprint.util.json import dumps as json_dumps
 from octoprint.util.version import get_python_version_string
 
 
@@ -67,7 +66,7 @@ class ThreadSafeSession(octoprint.vendor.sockjs.tornado.session.Session):
 class JsonEncodingSessionWrapper(wrapt.ObjectProxy):
     def send_message(self, msg, stats=True, binary=False):
         self.send_jsonified(
-            json_dump(octoprint.vendor.sockjs.tornado.util.bytes_to_str(msg)),
+            json_dumps(octoprint.vendor.sockjs.tornado.util.bytes_to_str(msg)),
             stats,
         )
 
@@ -78,7 +77,6 @@ class PrinterStateConnection(
     LoginStatusListener,
     GroupChangeListener,
 ):
-
     _event_permissions = {
         Events.USER_LOGGED_IN: [Permissions.ADMIN],
         Events.USER_LOGGED_OUT: [Permissions.ADMIN],
@@ -170,6 +168,14 @@ class PrinterStateConnection(
 
         self._registered = False
         self._authed = False
+        self._initial_data_sent = False
+
+        self._subscriptions_active = False
+        self._subscriptions = {"state": False, "plugins": [], "events": []}
+
+        self._keep_alive = RepeatedTimer(
+            60, self._keep_alive_callback, condition=lambda: self._authed
+        )
 
     @staticmethod
     def _get_remote_address(info):
@@ -178,11 +184,18 @@ class PrinterStateConnection(
             return forwarded_for.split(",")[0]
         return info.ip
 
+    def _keep_alive_callback(self):
+        if not self._authed:
+            return
+        if not isinstance(self._user, SessionUser):
+            return
+        self._user.touch()
+
     def __str__(self):
         if self._remoteAddress:
-            return "{!r} connected to {}".format(self, self._remoteAddress)
+            return f"{self!r} connected to {self._remoteAddress}"
         else:
-            return "Unconnected {!r}".format(self)
+            return f"Unconnected {self!r}"
 
     def on_open(self, info):
         self._pluginManager.register_message_receiver(self.on_plugin_message)
@@ -288,9 +301,10 @@ class PrinterStateConnection(
                     self._on_login(user)
                 else:
                     self._logger.warning(
-                        "Unknown user/session combo: {}:{}".format(user_id, user_session)
+                        f"Unknown user/session combo: {user_id}:{user_session}"
                     )
                     self._on_logout()
+                    self._sendReauthRequired("stale")
 
             self._register()
 
@@ -313,8 +327,77 @@ class PrinterStateConnection(
                     )
                 )
 
+        elif "subscribe" in message:
+            if not self._subscriptions_active:
+                self._subscriptions_active = True
+                self._logger.debug("Client makes use of subscriptions")
+
+            def list_or_boolean(value):
+                if isinstance(value, list):
+                    return value
+                elif isinstance(value, bool):
+                    return [] if not value else None
+                else:
+                    raise ValueError("value must be a list or boolean")
+
+            def regex_or_boolean(value):
+                if isinstance(value, str):
+                    try:
+                        return re.compile(value)
+                    except Exception:
+                        raise ValueError("value must be a valid regex")
+                elif isinstance(value, bool):
+                    return value
+                else:
+                    raise ValueError("value must be a string or boolean")
+
+            try:
+                subscribe = message["subscribe"]
+
+                state = subscribe.get("state", False)
+                if isinstance(state, bool):
+                    if state:
+                        state = {"logs": True, "messages": False}
+                elif isinstance(state, dict):
+                    logs = regex_or_boolean(state.get("logs", False))
+                    messages = regex_or_boolean(state.get("messages", False))
+                    state = {
+                        "logs": logs,
+                        "messages": messages,
+                    }
+
+                plugins = list_or_boolean(subscribe.get("plugins", []))
+                events = list_or_boolean(subscribe.get("events", []))
+
+            except ValueError as e:
+                self._logger.warning(
+                    "Got invalid subscription message from client {}, ignoring: {!r} ({}) ".format(
+                        self._remoteAddress, message["subscribe"], str(e)
+                    )
+                )
+            else:
+                old_state = self._subscriptions["state"]
+                self._subscriptions["state"] = state
+                self._subscriptions["plugins"] = plugins
+                self._subscriptions["events"] = events
+
+                if state and state != old_state:
+                    # state is requested and was changed from previous state
+                    # we should send a history message to send the update data
+                    self._printer.send_initial_callback(self)
+                elif old_state and not state:
+                    # we no longer should send state updates
+                    self._initial_data_sent = False
+
     def on_printer_send_current_data(self, data):
         if not self._user.has_permission(Permissions.STATUS):
+            return
+
+        if self._subscriptions_active and not self._subscriptions["state"]:
+            return
+
+        if not self._initial_data_sent:
+            self._logger.debug("Initial data not yet send, dropping current message")
             return
 
         # make sure we rate limit the updates according to our throttle factor
@@ -342,11 +425,11 @@ class PrinterStateConnection(
             self._temperatureBacklog = []
 
         with self._logBacklogMutex:
-            logs = self._logBacklog
+            logs = self._filter_logs(self._logBacklog)
             self._logBacklog = []
 
         with self._messageBacklogMutex:
-            messages = self._messageBacklog
+            messages = self._filter_messages(self._messageBacklog)
             self._messageBacklog = []
 
         busy_files = [
@@ -373,17 +456,49 @@ class PrinterStateConnection(
             {
                 "serverTime": time.time(),
                 "temps": temperatures,
-                "logs": logs,
-                "messages": messages,
                 "busyFiles": busy_files,
+                "markings": list(self._printer.get_markings()),
             }
         )
+        if self._user.has_permission(Permissions.MONITOR_TERMINAL):
+            data.update(
+                {
+                    "logs": self._filter_logs(logs),
+                    "messages": messages,
+                }
+            )
         self._emit("current", payload=data)
 
     def on_printer_send_initial_data(self, data):
+        self._initial_data_sent = True
+        if self._subscriptions_active and not self._subscriptions["state"]:
+            self._logger.debug("Not subscribed to state, dropping history")
+            return
+
         data_to_send = dict(data)
+
         data_to_send["serverTime"] = time.time()
+        if self._user.has_permission(Permissions.MONITOR_TERMINAL):
+            data_to_send["logs"] = self._filter_logs(data_to_send.get("logs", []))
+            data_to_send["messages"] = self._filter_messages(
+                data_to_send.get("messages", [])
+            )
         self._emit("history", payload=data_to_send)
+
+    def _filter_state_subscription(self, sub, values):
+        if not self._subscriptions_active or self._subscriptions["state"][sub] is True:
+            return values
+
+        if self._subscriptions["state"][sub] is False:
+            return []
+
+        return [line for line in values if self._subscriptions["state"][sub].search(line)]
+
+    def _filter_logs(self, logs):
+        return self._filter_state_subscription("logs", logs)
+
+    def _filter_messages(self, messages):
+        return self._filter_state_subscription("messages", messages)
 
     def sendEvent(self, type, payload=None):
         permissions = self._event_permissions.get(type, self._event_permissions["*"])
@@ -423,6 +538,13 @@ class PrinterStateConnection(
         self._emit("renderProgress", {"progress": progress})
 
     def on_plugin_message(self, plugin, data, permissions=None):
+        if (
+            self._subscriptions_active
+            and self._subscriptions["plugins"] is not None
+            and plugin not in self._subscriptions["plugins"]
+        ):
+            return
+
         self._emit(
             "plugin", payload={"plugin": plugin, "data": data}, permissions=permissions
         )
@@ -446,9 +568,7 @@ class PrinterStateConnection(
             and hasattr(self._user, "session")
             and user.session == self._user.session
         ):
-            self._logger.info(
-                "User {} logged out, logging out on socket".format(user.get_id())
-            )
+            self._logger.info(f"User {user.get_id()} logged out, logging out on socket")
             self._on_logout()
 
             if stale:
@@ -462,7 +582,7 @@ class PrinterStateConnection(
 
     def on_user_removed(self, userid):
         if self._user.get_id() == userid:
-            self._logger.info("User {} deleted, logging out on socket".format(userid))
+            self._logger.info(f"User {userid} deleted, logging out on socket")
             self._on_logout()
             self._sendReauthRequired("removed")
 
@@ -475,6 +595,13 @@ class PrinterStateConnection(
             self._sendReauthRequired("modified")
 
     def _onEvent(self, event, payload):
+        if (
+            self._subscriptions_active
+            and self._subscriptions["events"] is not None
+            and event not in self._subscriptions["events"]
+        ):
+            return
+
         self.sendEvent(event, payload)
 
     def _register(self):
@@ -486,7 +613,7 @@ class PrinterStateConnection(
                 proceed = proceed and hook(self, self._user)
             except Exception:
                 self._logger.exception(
-                    "Error processing register hook handler for plugin {}".format(name),
+                    f"Error processing register hook handler for plugin {name}",
                     extra={"plugin": name},
                 )
 
@@ -551,7 +678,7 @@ class PrinterStateConnection(
                 proceed = proceed and hook(self, self._user, type, payload)
             except Exception:
                 self._logger.exception(
-                    "Error processing emit hook handler from plugin {}".format(name),
+                    f"Error processing emit hook handler from plugin {name}",
                     extra={"plugin": name},
                 )
 
@@ -594,7 +721,7 @@ class PrinterStateConnection(
         except Exception as e:
             if self._logger.isEnabledFor(logging.DEBUG):
                 self._logger.exception(
-                    "Could not send message to client {}".format(self._remoteAddress)
+                    f"Could not send message to client {self._remoteAddress}"
                 )
             else:
                 self._logger.warning(
@@ -612,12 +739,14 @@ class PrinterStateConnection(
         )
         self._authed = True
 
+        self._keep_alive.start()
+
         for name, hook in self._authed_hooks.items():
             try:
                 hook(self, self._user)
             except Exception:
                 self._logger.exception(
-                    "Error processing authed hook handler for plugin {}".format(name),
+                    f"Error processing authed hook handler for plugin {name}",
                     extra={"plugin": name},
                 )
 
@@ -650,6 +779,6 @@ class PrinterStateConnection(
                 hook(self, self._user)
             except Exception:
                 self._logger.exception(
-                    "Error processing authed hook handler for plugin {}".format(name),
+                    f"Error processing authed hook handler for plugin {name}",
                     extra={"plugin": name},
                 )

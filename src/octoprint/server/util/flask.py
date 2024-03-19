@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 from flask import make_response
 
 __author__ = "Gina Häußge <osd@foosel.net>"
@@ -8,15 +5,20 @@ __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agp
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import functools
-import io
+import hashlib
+import hmac
 import logging
 import os
 import threading
 import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Union
 
 import flask
 import flask.json
+import flask.json.provider
 import flask.sessions
+import flask.templating
 import flask_assets
 import flask_login
 import netaddr
@@ -24,7 +26,9 @@ import tornado.web
 import webassets.updater
 import webassets.utils
 from cachelib import BaseCache
-from past.builtins import basestring, long
+from flask import current_app
+from flask_login import COOKIE_NAME as REMEMBER_COOKIE_NAME
+from flask_login.utils import decode_cookie, encode_cookie
 from werkzeug.local import LocalProxy
 from werkzeug.utils import cached_property
 
@@ -32,16 +36,13 @@ import octoprint.access.users
 import octoprint.plugin
 import octoprint.server
 import octoprint.vendor.flask_principal as flask_principal
+from octoprint.access import auth_log
 from octoprint.events import Events, eventManager
 from octoprint.settings import settings
-from octoprint.util import DefaultOrderedDict, deprecated
+from octoprint.util import DefaultOrderedDict, deprecated, yaml
 from octoprint.util.json import JsonEncoding
 from octoprint.util.net import is_lan_address
-
-try:
-    from os import scandir, walk
-except ImportError:
-    from scandir import scandir, walk  # noqa: F401
+from octoprint.util.tz import UTC_TZ, is_timezone_aware
 
 # ~~ monkey patching
 
@@ -51,7 +52,6 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
 
     import flask_babel
     from babel import Locale, support
-    from flask import _request_ctx_stack
 
     if additional_folders is None:
         additional_folders = []
@@ -68,11 +68,11 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
             if not os.path.isdir(dirname):
                 return []
             result = []
-            for entry in scandir(dirname):
+            for entry in os.scandir(dirname):
                 locale_dir = os.path.join(entry.path, "LC_MESSAGES")
                 if not os.path.isdir(locale_dir):
                     continue
-                if any(filter(lambda x: x.name.endswith(".mo"), scandir(locale_dir))):
+                if any(filter(lambda x: x.name.endswith(".mo"), os.scandir(locale_dir))):
                     result.append(Locale.parse(entry.name))
             return result
 
@@ -86,11 +86,11 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
                 continue
             dirs.append(plugin_translation_dir)
 
-        result = [Locale.parse(default_locale)]
+        result = {Locale.parse(default_locale)}
 
         for dir in dirs:
-            result += list_translations(dir)
-        return result
+            result.update(list_translations(dir))
+        return list(result)
 
     def fixed_get_translations():
         """Returns the correct gettext translations that should be used for
@@ -98,10 +98,9 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
         object if used outside of the request or if a translation cannot be
         found.
         """
-        ctx = _request_ctx_stack.top
-        if ctx is None:
+        if flask.g is None:
             return None
-        translations = getattr(ctx, "babel_translations", None)
+        translations = getattr(flask.g, "babel_translations", None)
         if translations is None:
             locale = flask_babel.get_locale()
             translations = support.Translations()
@@ -110,15 +109,12 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
                 # plugin translations
                 plugins = octoprint.plugin.plugin_manager().enabled_plugins
                 for name, plugin in plugins.items():
-                    dirs = (
-                        list(
-                            map(
-                                lambda x: os.path.join(x, "_plugins", name),
-                                additional_folders,
-                            )
+                    dirs = list(
+                        map(
+                            lambda x: os.path.join(x, "_plugins", name),
+                            additional_folders,
                         )
-                        + [os.path.join(plugin.location, "translations")]
-                    )
+                    ) + [os.path.join(plugin.location, "translations")]
                     for dirname in dirs:
                         if not os.path.isdir(dirname):
                             continue
@@ -129,121 +125,43 @@ def enable_additional_translations(default_locale="en", additional_folders=None)
                             )
                         except Exception:
                             logger.exception(
-                                "Error while trying to load translations "
-                                "for plugin {name}".format(**locals())
+                                f"Error while trying to load translations "
+                                f"for plugin {name}"
                             )
                         else:
                             if isinstance(plugin_translations, support.Translations):
                                 translations = translations.merge(plugin_translations)
                                 logger.debug(
-                                    "Using translation plugin folder {dirname} from "
-                                    "plugin {name} for locale {locale}".format(**locals())
+                                    f"Using translation plugin folder {dirname} from "
+                                    f"plugin {name} for locale {locale}"
                                 )
                                 break
                     else:
                         logger.debug(
-                            "No translations for locale {locale} "
-                            "from plugin {name}".format(**locals())
+                            f"No translations for locale {locale} " f"from plugin {name}"
                         )
 
                 # core translations
                 dirs = additional_folders + [
-                    os.path.join(ctx.app.root_path, "translations")
+                    os.path.join(flask.current_app.root_path, "translations")
                 ]
                 for dirname in dirs:
                     core_translations = support.Translations.load(dirname, [locale])
                     if isinstance(core_translations, support.Translations):
                         logger.debug(
-                            "Using translation core folder {dirname} "
-                            "for locale {locale}".format(**locals())
+                            f"Using translation core folder {dirname} "
+                            f"for locale {locale}"
                         )
                         break
                 else:
-                    logger.debug(
-                        "No translations for locale {} in core folders".format(locale)
-                    )
+                    logger.debug(f"No translations for locale {locale} in core folders")
                 translations = translations.merge(core_translations)
 
-            ctx.babel_translations = translations
+            flask.g.babel_translations = translations
         return translations
 
     flask_babel.Babel.list_translations = fixed_list_translations
     flask_babel.get_translations = fixed_get_translations
-
-
-def fix_webassets_cache():
-    from webassets import cache
-
-    error_logger = logging.getLogger(__name__ + ".fix_webassets_cache")
-
-    def fixed_set(self, key, data):
-        import os
-        import pickle
-        import shutil
-        import tempfile
-
-        if not os.path.exists(self.directory):
-            error_logger.warning(
-                "Cache directory {} doesn't exist, not going "
-                "to attempt to write cache file".format(self.directory)
-            )
-
-        md5 = "%s" % cache.make_md5(self.V, key)
-        filename = os.path.join(self.directory, md5)
-        fd, temp_filename = tempfile.mkstemp(prefix="." + md5, dir=self.directory)
-        try:
-            with os.fdopen(fd, "wb") as f:
-                pickle.dump(data, f)
-                f.flush()
-            shutil.move(temp_filename, filename)
-        except Exception:
-            os.remove(temp_filename)
-            raise
-
-    def fixed_get(self, key):
-        import errno
-        import os
-        import warnings
-
-        from webassets.cache import make_md5
-
-        if not os.path.exists(self.directory):
-            error_logger.warning(
-                "Cache directory {} doesn't exist, not going "
-                "to attempt to read cache file".format(self.directory)
-            )
-            return None
-
-        try:
-            hash = make_md5(self.V, key)
-        except IOError as e:
-            if e.errno != errno.ENOENT:
-                raise
-            return None
-
-        filename = os.path.join(self.directory, "%s" % hash)
-        try:
-            f = io.open(filename, "rb")
-        except IOError as e:
-            if e.errno != errno.ENOENT:
-                error_logger.exception(
-                    "Got an exception while trying to open webasset file {}".format(
-                        filename
-                    )
-                )
-            return None
-        try:
-            result = f.read()
-        finally:
-            f.close()
-
-        unpickled = webassets.cache.safe_unpickle(result)
-        if unpickled is None:
-            warnings.warn("Ignoring corrupted cache file %s" % filename)
-        return unpickled
-
-    cache.FilesystemCache.set = fixed_set
-    cache.FilesystemCache.get = fixed_get
 
 
 def fix_webassets_filtertool():
@@ -284,39 +202,46 @@ def fix_webassets_filtertool():
     FilterTool._wrap_cache = fixed_wrap_cache
 
 
-def fix_flask_jsonify():
-    def fixed_jsonify(*args, **kwargs):
-        """Backported from https://github.com/pallets/flask/blob/7e714bd28b6e96d82b2848b48cf8ff48b517b09b/flask/json/__init__.py#L257"""
-        from flask.json import current_app, dumps
+def fix_webassets_convert_item_to_flask_url():
+    import flask_assets
 
-        indent = None
-        separators = (",", ":")
+    def fixed_convert_item_to_flask_url(self, ctx, item, filepath=None):
+        from flask import url_for
 
-        if current_app.config["JSONIFY_PRETTYPRINT_REGULAR"] or current_app.debug:
-            indent = 2
-            separators = (", ", ": ")
+        directory, rel_path, endpoint = self.split_prefix(ctx, item)
 
-        if args and kwargs:
-            raise TypeError(
-                "jsonify() behavior undefined when passed both args and kwargs"
-            )
-        elif len(args) == 1:  # single args are passed directly to dumps()
-            data = args[0]
+        if filepath is not None:
+            filename = filepath[len(directory) + 1 :]
         else:
-            data = args or kwargs
+            filename = rel_path
 
-        return current_app.response_class(
-            dumps(data, indent=indent, separators=separators, allow_nan=False) + "\n",
-            mimetype="application/json",
-        )
+        flask_ctx = None
+        if not flask.has_request_context():  # fixed, was _request_ctx.top
+            flask_ctx = ctx.environment._app.test_request_context()
+            flask_ctx.push()
+        try:
+            url = url_for(endpoint, filename=filename)
+            # In some cases, url will be an absolute url with a scheme and hostname.
+            # (for example, when using werkzeug's host matching).
+            # In general, url_for() will return a http url. During assets build, we
+            # we don't know yet if the assets will be served over http, https or both.
+            # Let's use // instead. url_for takes a _scheme argument, but only together
+            # with external=True, which we do not want to force every time. Further,
+            # this _scheme argument is not able to render // - it always forces a colon.
+            if url and url.startswith("http:"):
+                url = url[5:]
+            return url
+        finally:
+            if flask_ctx:
+                flask_ctx.pop()
 
-    flask.jsonify = fixed_jsonify
+    flask_assets.FlaskResolver.convert_item_to_flask_url = fixed_convert_item_to_flask_url
 
 
 # ~~ WSGI environment wrapper for reverse proxying
 
 
-class ReverseProxiedEnvironment(object):
+class ReverseProxiedEnvironment:
     @staticmethod
     def to_header_candidates(values):
         if values is None:
@@ -349,10 +274,9 @@ class ReverseProxiedEnvironment(object):
         server=None,
         port=None,
     ):
-
         # sensible defaults
         if header_prefix is None:
-            header_prefix = ["x-script-name"]
+            header_prefix = ["x-script-name", "x-forwarded-prefix"]
         if header_scheme is None:
             header_scheme = ["x-forwarded-proto", "x-scheme"]
         if header_host is None:
@@ -509,6 +433,63 @@ class ReverseProxiedEnvironment(object):
 # ~~ request and response versions
 
 
+def encode_remember_me_cookie(value):
+    from octoprint.server import userManager
+
+    name = value.split("|")[0]
+    try:
+        remember_key = userManager.signature_key_for_user(
+            name, current_app.config["SECRET_KEY"]
+        )
+        timestamp = datetime.utcnow().timestamp()
+        return encode_cookie(f"{name}|{timestamp}", key=remember_key)
+    except Exception:
+        pass
+
+    return ""
+
+
+def decode_remember_me_cookie(value):
+    from octoprint.server import userManager
+
+    parts = value.split("|")
+    if len(parts) == 3:
+        name, created, _ = parts
+
+        try:
+            # valid signature?
+            signature_key = userManager.signature_key_for_user(
+                name, current_app.config["SECRET_KEY"]
+            )
+            cookie = decode_cookie(value, key=signature_key)
+            if cookie:
+                # still valid?
+                if (
+                    datetime.fromtimestamp(float(created))
+                    + timedelta(seconds=current_app.config["REMEMBER_COOKIE_DURATION"])
+                    > datetime.utcnow()
+                ):
+                    return encode_cookie(name)
+        except Exception:
+            pass
+
+    raise ValueError("Invalid remember me cookie")
+
+
+def get_cookie_suffix(request):
+    """
+    Request specific suffix for set and read cookies
+
+    We need this because cookies are not port-specific and we don't want to overwrite our
+    session and other cookies from one OctoPrint instance on our machine with those of another
+    one who happens to listen on the same address albeit a different port or script root.
+    """
+    result = "_P" + request.server_port
+    if request.script_root:
+        return result + "_R" + request.script_root.replace("/", "|")
+    return result
+
+
 class OctoPrintFlaskRequest(flask.Request):
     environment_wrapper = staticmethod(lambda x: x)
 
@@ -524,10 +505,23 @@ class OctoPrintFlaskRequest(flask.Request):
         result = {}
         desuffixed = {}
         for key, value in cookies.items():
-            if key.endswith(self.cookie_suffix):
-                desuffixed[key[: -len(self.cookie_suffix)]] = value
-            else:
-                result[key] = value
+
+            def process_value(k, v):
+                if k == current_app.config.get(
+                    "REMEMBER_COOKIE_NAME", REMEMBER_COOKIE_NAME
+                ):
+                    return decode_remember_me_cookie(v)
+                return v
+
+            try:
+                if key.endswith(self.cookie_suffix):
+                    key = key[: -len(self.cookie_suffix)]
+                    desuffixed[key] = process_value(key, value)
+                else:
+                    result[key] = process_value(key, value)
+            except ValueError:
+                # ignore broken cookies
+                pass
 
         result.update(desuffixed)
         return result
@@ -544,21 +538,11 @@ class OctoPrintFlaskRequest(flask.Request):
 
     @cached_property
     def cookie_suffix(self):
-        """
-        Request specific suffix for set and read cookies
-
-        We need this because cookies are not port-specific and we don't want to overwrite our
-        session and other cookies from one OctoPrint instance on our machine with those of another
-        one who happens to listen on the same address albeit a different port or script root.
-        """
-        result = "_P" + self.server_port
-        if self.script_root:
-            return result + "_R" + self.script_root.replace("/", "|")
-        return result
+        return get_cookie_suffix(self)
 
 
 class OctoPrintFlaskResponse(flask.Response):
-    def set_cookie(self, key, *args, **kwargs):
+    def set_cookie(self, key, value="", *args, **kwargs):
         # restrict cookie path to script root
         kwargs["path"] = flask.request.script_root + kwargs.get("path", "/")
 
@@ -575,11 +559,17 @@ class OctoPrintFlaskResponse(flask.Response):
         kwargs["samesite"] = samesite
 
         # set secure if necessary
-        kwargs["secure"] = settings().getBoolean(["server", "cookies", "secure"])
+        kwargs["secure"] = flask.request.environ.get(
+            "wsgi.url_scheme"
+        ) == "https" or settings().getBoolean(["server", "cookies", "secure"])
+
+        # tie account properties to remember me cookie (e.g. current password hash)
+        if key == current_app.config.get("REMEMBER_COOKIE_NAME", REMEMBER_COOKIE_NAME):
+            value = encode_remember_me_cookie(value)
 
         # add request specific cookie suffix to name
         flask.Response.set_cookie(
-            self, key + flask.request.cookie_suffix, *args, **kwargs
+            self, key + flask.request.cookie_suffix, value=value, *args, **kwargs
         )
 
     def delete_cookie(self, key, path="/", domain=None):
@@ -599,7 +589,37 @@ class OctoPrintSessionInterface(flask.sessions.SecureCookieSessionInterface):
     def save_session(self, app, session, response):
         if flask.g.get("login_via_apikey", False):
             return
-        return super(OctoPrintSessionInterface, self).save_session(app, session, response)
+        return super().save_session(app, session, response)
+
+
+# ~~ jinja environment
+
+
+class PrefixAwareJinjaEnvironment(flask.templating.Environment):
+    def __init__(self, *args, **kwargs):
+        flask.templating.Environment.__init__(self, *args, **kwargs)
+        self.prefix_loader = None
+        self._cached_templates = {}
+
+    def join_path(self, template, parent):
+        if parent and "/" in parent:
+            prefix, _ = parent.split("/", 1)
+            if template in self._templates_for_prefix(prefix) and not template.startswith(
+                prefix + "/"
+            ):
+                return prefix + "/" + template
+
+        return template
+
+    def _templates_for_prefix(self, prefix):
+        if prefix in self._cached_templates:
+            return self._cached_templates[prefix]
+
+        templates = []
+        if prefix in self.prefix_loader.mapping:
+            templates = self.prefix_loader.mapping[prefix].list_templates()
+        self._cached_templates[prefix] = templates
+        return templates
 
 
 # ~~ passive login helper
@@ -625,7 +645,7 @@ def _local_networks():
                 continue
 
             local_networks.add(network)
-            logger.debug("Added network {} to localNetworks".format(network))
+            logger.debug(f"Added network {network} to localNetworks")
 
             if network.version == 4:
                 network_v6 = network.ipv6()
@@ -657,7 +677,16 @@ def passive_login():
     def login(u):
         # login known user
         if not u.is_anonymous:
+            if not flask.g.identity or not flask.g.identity.id:
+                # the user was just now found
+                login_mechanism = octoprint.server.util.LoginMechanism.to_log(
+                    flask.session.get("login_mechanism", "unknown")
+                )
+                auth_log(
+                    f"Logging in user {u.get_id()} from {remote_address} via {login_mechanism}"
+                )
             u = octoprint.server.userManager.login_user(u)
+
         flask_login.login_user(u)
         flask_principal.identity_changed.send(
             flask.current_app._get_current_object(),
@@ -665,6 +694,9 @@ def passive_login():
         )
         if hasattr(u, "session"):
             flask.session["usersession.id"] = u.session
+            flask.session["usersession.signature"] = session_signature(
+                u.get_id(), u.session
+            )
         flask.g.user = u
 
         eventManager().fire(Events.USER_LOGGED_IN, payload={"username": u.get_id()})
@@ -674,9 +706,7 @@ def passive_login():
     def determine_user(u):
         if not u.is_anonymous and u.is_active:
             # known active user
-            logger.info(
-                "Passively logging in user {} from {}".format(u.get_id(), remote_address)
-            )
+            logger.info(f"Passively logging in user {u.get_id()} from {remote_address}")
 
         elif (
             settings().getBoolean(["accessControl", "autologinLocal"])
@@ -699,11 +729,12 @@ def passive_login():
                     autologin_user = octoprint.server.userManager.find_user(autologin_as)
                     if autologin_user is not None and autologin_user.is_active:
                         logger.info(
-                            "Passively logging in user {} from {} via autologin".format(
-                                autologin_as, remote_address
-                            )
+                            f"Logging in user {autologin_as} from {remote_address} via autologin"
                         )
-                        flask.session["login_mechanism"] = "autologin"
+                        flask.session[
+                            "login_mechanism"
+                        ] = octoprint.server.util.LoginMechanism.AUTOLOGIN
+                        flask.session["credentials_seen"] = False
                         return autologin_user
             except Exception:
                 logger.exception(
@@ -725,7 +756,39 @@ def passive_login():
     )
     if flask.session.get("login_mechanism") is not None:
         response["_login_mechanism"] = flask.session.get("login_mechanism")
+    response["_credentials_seen"] = to_api_credentials_seen(
+        flask.session.get("credentials_seen", False)
+    )
     return flask.jsonify(response)
+
+
+def to_api_credentials_seen(credentials_seen):
+    if not credentials_seen:
+        return False
+
+    return (
+        datetime.fromtimestamp(credentials_seen, tz=timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+    )
+
+
+# ~~ rate limiting helper
+
+
+def limit(*args, **kwargs):
+    if octoprint.server.limiter:
+        return octoprint.server.limiter.limit(*args, **kwargs)
+    else:
+
+        def decorator(f):
+            @functools.wraps(f)
+            def decorated_function(*args, **kwargs):
+                return f(*args, **kwargs)
+
+            return decorated_function
+
+        return decorator
 
 
 # ~~ cache decorator for cacheable views
@@ -955,7 +1018,7 @@ def cache_check_status_code(response, valid):
         return response.status_code not in valid
 
 
-class PreemptiveCache(object):
+class PreemptiveCache:
     def __init__(self, cachefile):
         self.cachefile = cachefile
         self.environment = None
@@ -1008,9 +1071,7 @@ class PreemptiveCache(object):
                 entries = cleanup_function(root, entries)
                 if not entries:
                     del all_data[root]
-                    self._logger.debug(
-                        "Removed root {} from preemptive cache".format(root)
-                    )
+                    self._logger.debug(f"Removed root {root} from preemptive cache")
                 elif len(entries) < old_count:
                     all_data[root] = entries
                     self._logger.debug(
@@ -1023,20 +1084,17 @@ class PreemptiveCache(object):
         return all_data
 
     def get_all_data(self):
-        import yaml
-
         cache_data = None
         with self._lock:
             try:
-                with io.open(self.cachefile, "rt") as f:
-                    cache_data = yaml.safe_load(f)
-            except IOError as e:
+                cache_data = yaml.load_from_file(path=self.cachefile)
+            except OSError as e:
                 import errno
 
                 if e.errno != errno.ENOENT:
                     raise
             except Exception:
-                self._logger.exception("Error while reading {}".format(self.cachefile))
+                self._logger.exception(f"Error while reading {self.cachefile}")
 
         if cache_data is None:
             cache_data = {}
@@ -1052,22 +1110,14 @@ class PreemptiveCache(object):
         return cache_data.get(root, list())
 
     def set_all_data(self, data):
-        import yaml
-
         from octoprint.util import atomic_write
 
         with self._lock:
             try:
                 with atomic_write(self.cachefile, "wt", max_permissions=0o666) as handle:
-                    yaml.safe_dump(
-                        data,
-                        handle,
-                        default_flow_style=False,
-                        indent=2,
-                        allow_unicode=True,
-                    )
+                    yaml.save_to_file(data, file=handle, pretty=True)
             except Exception:
-                self._logger.exception("Error while writing {}".format(self.cachefile))
+                self._logger.exception(f"Error while writing {self.cachefile}")
 
     def set_data(self, root, data):
         with self._lock:
@@ -1116,12 +1166,12 @@ class PreemptiveCache(object):
                 to_persist = copy.deepcopy(data)
                 to_persist["_timestamp"] = time.time()
                 to_persist["_count"] = 1
-                self._logger.info("Adding entry for {} and {!r}".format(root, to_persist))
+                self._logger.info(f"Adding entry for {root} and {to_persist!r}")
             else:
                 to_persist["_timestamp"] = time.time()
                 to_persist["_count"] = to_persist.get("_count", 0) + 1
                 self._logger.debug(
-                    "Updating timestamp and counter for {} and {!r}".format(root, data)
+                    f"Updating timestamp and counter for {root} and {data!r}"
                 )
 
             self.set_data(root, [to_persist] + other)
@@ -1160,7 +1210,7 @@ def preemptively_cached(cache, data, unless=None):
                 cache.record(data, unless=unless)
             except Exception:
                 logging.getLogger(__name__).exception(
-                    "Error while recording preemptive cache entry: {!r}".format(data)
+                    f"Error while recording preemptive cache entry: {data!r}"
                 )
             return f(*args, **kwargs)
 
@@ -1205,7 +1255,7 @@ def lastmodified(date):
                     if callable(result):
                         result = result(rv)
 
-                    if not isinstance(result, basestring):
+                    if not isinstance(result, str):
                         from werkzeug.http import http_date
 
                         result = http_date(result)
@@ -1324,7 +1374,7 @@ def with_revalidation_checking(
 
             # set last modified header if not already set
             if lm and response.headers.get("Last-Modified", None) is None:
-                if not isinstance(lm, basestring):
+                if not isinstance(lm, str):
                     from werkzeug.http import http_date
 
                     lm = http_date(lm)
@@ -1349,21 +1399,40 @@ def check_etag(etag):
     )
 
 
-def check_lastmodified(lastmodified):
+def check_lastmodified(lastmodified: Union[int, float, datetime]) -> bool:
+    """Compares the provided lastmodified value with the value of the If-Modified-Since header.
+
+    If ``lastmodified`` is an int or float, it's assumed to be a Unix timestamp and converted
+    to a timezone aware datetime instance in UTC.
+
+    If ``lastmodified`` is a datetime instance, it needs to be timezone aware or the
+    result will always be ``False``.
+
+    Args:
+        lastmodified (Union[int, float, datetime]): The last modified value to compare against
+
+    Raises:
+        ValueError: If anything but an int, float or datetime instance is passed
+
+    Returns:
+        bool: true if the values indicate that the document is still up to date
+    """
+
     if lastmodified is None:
         return False
 
-    from datetime import datetime
-
-    if isinstance(lastmodified, (int, long, float)):
+    if isinstance(lastmodified, (int, float)):
         # max(86400, lastmodified) is workaround for https://bugs.python.org/issue29097,
         # present in CPython 3.6.x up to 3.7.1.
         #
         # I think it's fair to say that we'll never encounter lastmodified values older than
         # 1970-01-02 so this is a safe workaround.
-        lastmodified = datetime.fromtimestamp(max(86400, lastmodified)).replace(
-            microsecond=0
-        )
+        #
+        # Timestamps are defined as seconds since epoch aka 1970/01/01 00:00:00Z, so we
+        # use UTC as timezone here.
+        lastmodified = datetime.fromtimestamp(
+            max(86400, lastmodified), tz=UTC_TZ
+        ).replace(microsecond=0)
 
     if not isinstance(lastmodified, datetime):
         raise ValueError(
@@ -1371,6 +1440,15 @@ def check_lastmodified(lastmodified):
                 lastmodified.__class__
             )
         )
+
+    if not is_timezone_aware(lastmodified):
+        # datetime object is not timezone aware, we can't check lastmodified with that
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "lastmodified is not timezone aware, cannot check against If-Modified-Since. In the future this will become an error!",
+            stack_info=logger.isEnabledFor(logging.DEBUG),
+        )
+        return False
 
     return (
         flask.request.method in ("GET", "HEAD")
@@ -1449,6 +1527,21 @@ def permission_validator(request, permission):
     user = get_flask_user_from_request(request)
     if not user.has_permission(permission):
         raise tornado.web.HTTPError(403)
+
+
+def permission_and_fresh_credentials_validator(request, permission):
+    """
+    Validates that the given request is made by an authorized user, identified either by API key or existing Flask
+    session, and that the credentials have been checked recently if it's a Flask session.
+
+    Must be executed in an existing Flask request context!
+
+    :param request: The Flask request object
+    :param request: The required permission
+    """
+
+    permission_validator(request, permission)
+    ensure_credentials_checked_recently()
 
 
 @deprecated(
@@ -1575,6 +1668,51 @@ def firstrun_only_access(func):
     return decorated_view
 
 
+def credentials_checked_recently():
+    minutes = settings().getInt(["accessControl", "defaultReauthenticationTimeout"])
+    if not minutes:
+        return True
+
+    login_mechanism = flask.session.get("login_mechanism")
+    if not octoprint.server.util.LoginMechanism.reauthentication_enabled(login_mechanism):
+        return True
+
+    credentials_seen = flask.session.get("credentials_seen")
+    now = datetime.now()
+
+    try:
+        if credentials_seen and datetime.fromtimestamp(
+            credentials_seen
+        ) > now - timedelta(minutes=minutes):
+            # credentials seen less than the set minutes ago, proceed
+            return True
+    except Exception:
+        logging.getLogger(__name__).exception("Error while checking for seen credentials")
+        pass
+
+    return False
+
+
+def ensure_credentials_checked_recently():
+    if not credentials_checked_recently():
+        flask.abort(403, description="Please reauthenticate with your credentials")
+
+
+def require_credentials_checked_recently(func):
+    """
+    If you decorate a view with this, it will ensure that only users who entered their password
+    recently in this login session are allowed to proceed. Otherwise it will cause a HTTP 403 status code
+    to be returned by the decorated resource.
+    """
+
+    @functools.wraps(func)
+    def decorated_view(*args, **kwargs):
+        ensure_credentials_checked_recently()
+        return func(*args, **kwargs)
+
+    return decorated_view
+
+
 def get_remote_address(request):
     forwardedFor = request.headers.get("X-Forwarded-For", None)
     if forwardedFor is not None:
@@ -1583,15 +1721,8 @@ def get_remote_address(request):
 
 
 def get_json_command_from_request(request, valid_commands):
-    content_type = request.headers.get("Content-Type", None)
-    if content_type is None or "application/json" not in content_type:
-        flask.abort(400, description="Expected content-type JSON")
-
     data = request.get_json()
-    if data is None:
-        flask.abort(
-            400, description="Malformed JSON body or wrong content-type in request"
-        )
+
     if "command" not in data or data["command"] not in valid_commands:
         flask.abort(400, description="command is invalid")
 
@@ -1665,7 +1796,6 @@ class PluginAssetResolver(flask_assets.FlaskResolver):
 
 
 class SettingsCheckUpdater(webassets.updater.BaseUpdater):
-
     updater = "always"
 
     def __init__(self):
@@ -1704,6 +1834,7 @@ def collect_core_assets(preferred_stylesheet="css"):
     assets["js"] = [
         "js/app/bindings/allowbindings.js",
         "js/app/bindings/contextmenu.js",
+        "js/app/bindings/gettext.js",
         "js/app/bindings/invisible.js",
         "js/app/bindings/popover.js",
         "js/app/bindings/qrcode.js",
@@ -1716,6 +1847,7 @@ def collect_core_assets(preferred_stylesheet="css"):
         "js/app/viewmodels/connection.js",
         "js/app/viewmodels/control.js",
         "js/app/viewmodels/files.js",
+        "js/app/viewmodels/firstrun_wizard.js",
         "js/app/viewmodels/loginstate.js",
         "js/app/viewmodels/loginui.js",
         "js/app/viewmodels/navigation.js",
@@ -1820,24 +1952,20 @@ def collect_plugin_assets(preferred_stylesheet="css"):
             for asset in all_assets["js"]:
                 if not asset_exists("js", asset):
                     continue
-                assets[asset_key]["js"][name].append(
-                    "plugin/{name}/{asset}".format(**locals())
-                )
+                assets[asset_key]["js"][name].append(f"plugin/{name}/{asset}")
 
         if "clientjs" in all_assets:
             for asset in all_assets["clientjs"]:
                 if not asset_exists("clientjs", asset):
                     continue
-                assets[asset_key]["clientjs"][name].append(
-                    "plugin/{name}/{asset}".format(**locals())
-                )
+                assets[asset_key]["clientjs"][name].append(f"plugin/{name}/{asset}")
 
         if preferred_stylesheet in all_assets:
             for asset in all_assets[preferred_stylesheet]:
                 if not asset_exists(preferred_stylesheet, asset):
                     continue
                 assets[asset_key][preferred_stylesheet][name].append(
-                    "plugin/{name}/{asset}".format(**locals())
+                    f"plugin/{name}/{asset}"
                 )
         else:
             for stylesheet in supported_stylesheets:
@@ -1847,9 +1975,7 @@ def collect_plugin_assets(preferred_stylesheet="css"):
                 for asset in all_assets[stylesheet]:
                     if not asset_exists(stylesheet, asset):
                         continue
-                    assets[asset_key][stylesheet][name].append(
-                        "plugin/{name}/{asset}".format(**locals())
-                    )
+                    assets[asset_key][stylesheet][name].append(f"plugin/{name}/{asset}")
                 break
 
     return assets
@@ -1858,9 +1984,31 @@ def collect_plugin_assets(preferred_stylesheet="css"):
 ##~~ JSON encoding
 
 
-class OctoPrintJsonEncoder(flask.json.JSONEncoder):
-    def default(self, obj):
+class OctoPrintJsonProvider(flask.json.provider.DefaultJSONProvider):
+    @staticmethod
+    def default(object_):
         try:
-            return JsonEncoding.encode(obj)
+            return JsonEncoding.encode(object_)
         except TypeError:
-            return flask.json.JSONEncoder.default(self, obj)
+            return flask.json.provider.DefaultJSONProvider.default(object_)
+
+    def dumps(self, obj: Any, **kwargs: Any) -> str:
+        kwargs.setdefault("allow_nan", False)
+        return super().dumps(obj, **kwargs)
+
+
+##~~ Session signing
+
+
+def session_signature(user, session):
+    from octoprint.server import userManager
+
+    key = userManager.signature_key_for_user(user, current_app.config["SECRET_KEY"])
+    return hmac.new(
+        key.encode("utf-8"), session.encode("utf-8"), hashlib.sha512
+    ).hexdigest()
+
+
+def validate_session_signature(sig, user, session):
+    user_sig = session_signature(user, session)
+    return len(user_sig) == len(sig) and hmac.compare_digest(sig, user_sig)

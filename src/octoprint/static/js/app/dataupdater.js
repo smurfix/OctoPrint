@@ -18,7 +18,7 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
     self._lastProcessingTimesSize = 20;
 
     self._safeModePopup = undefined;
-    self._python2Popup = undefined;
+    self._reloadPopup = undefined;
 
     self.increaseThrottle = function () {
         self.setThrottle(self._throttleFactor + 1);
@@ -234,22 +234,6 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                 });
             }
 
-            // process python version
-            if (self._python2Popup) self._python2Popup.remove();
-            if (PYTHON_VERSION && PYTHON_VERSION.startsWith("2.")) {
-                self._python2Popup = new PNotify({
-                    title: gettext("You are still running Python 2"),
-                    text: _.sprintf(
-                        gettext(
-                            "<p>Python 2 is end-of-life as of January 1st 2020. While OctoPrint currently still supports running under Python 2, a future version will remove support and require Python 3. You should upgrade as soon as possible!</p><p>Please refer to the FAQ for recommended update workflows:</p>"
-                        ) +
-                            "<p><a href='https://faq.octoprint.org/python3-update' target='_blank' rel='noopener noreferer'>How to migrate to Python 3</a></p>",
-                        {reason: _.escape(reason)}
-                    ),
-                    hide: false
-                });
-            }
-
             // if the offline overlay is still showing, now's a good time to
             // hide it, plus reload the camera feed if it's currently displayed
             if ($("#offline_overlay").is(":visible")) {
@@ -264,13 +248,71 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
 
             // if the version, the plugin hash or the config hash changed, we
             // want the user to reload the UI since it might be stale now
-            var versionChanged = oldVersion !== VERSION;
-            var pluginsChanged =
+            const versionChanged = oldVersion !== VERSION;
+            const pluginsChanged =
                 oldPluginHash !== undefined && oldPluginHash !== self._pluginHash;
-            var configChanged =
+            const configChanged =
                 oldConfigHash !== undefined && oldConfigHash !== self._configHash;
-            if (versionChanged || pluginsChanged || configChanged) {
+
+            if (versionChanged) {
                 showReloadOverlay();
+            } else if (pluginsChanged || configChanged) {
+                if (self._reloadPopup) self._reloadPopup.remove();
+
+                let text;
+                if (pluginsChanged && configChanged) {
+                    text = gettext(
+                        "A client reconnect happened and the configuration of the server and the active UI relevant plugins have changed."
+                    );
+                } else if (pluginsChanged) {
+                    text = gettext(
+                        "A client reconnect happened and the active UI relevant plugins have changed."
+                    );
+                } else if (configChanged) {
+                    text = gettext(
+                        "A client reconnect happened and the configuration of the server has changed."
+                    );
+                }
+
+                self._reloadPopup = new PNotify({
+                    title: gettext("Page reload recommended"),
+                    text:
+                        "<p>" +
+                        text +
+                        "</p>" +
+                        "<p>" +
+                        gettext(
+                            "Due to this a reload of the UI is recommended. " +
+                                "Please reload the UI now by clicking " +
+                                'the "Reload" button below. This will not interrupt ' +
+                                "any print jobs you might have ongoing."
+                        ) +
+                        "</p>",
+                    hide: false,
+                    confirm: {
+                        confirm: true,
+                        buttons: [
+                            {
+                                text: gettext("Ignore"),
+                                click: function () {
+                                    self._reloadPopup.remove();
+                                }
+                            },
+                            {
+                                text: gettext("Reload"),
+                                addClass: "btn-primary",
+                                click: function () {
+                                    self._reloadPopup.remove();
+                                    location.reload(true);
+                                }
+                            }
+                        ]
+                    },
+                    buttons: {
+                        closer: false,
+                        sticker: false
+                    }
+                });
             }
 
             log.info("Server (re)connect processed");
@@ -344,6 +386,7 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                     hide: false
                 });
             } else if (type === "Error" && payload.error) {
+                severity = "error";
                 switch (payload.reason) {
                     case "firmware": {
                         title = gettext("Error reported by printer");
@@ -353,6 +396,7 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                             ),
                             {error: _.escape(payload.error)}
                         );
+
                         break;
                     }
                     case "resend":
@@ -388,7 +432,13 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                         break;
                     }
                     case "autodetect": {
-                        // ignore
+                        title = gettext("Could not autodetect your printer");
+                        text = _.sprintf(
+                            gettext(
+                                'No working connection parameters could be found. Are you sure your printer is physically connected and supported? Refer to <a href="%(url)s" target="_blank" rel="noopener noreferer">the FAQ</a> for help in debugging this.'
+                            ),
+                            {url: "https://faq.octoprint.org/connection-error"}
+                        );
                         break;
                     }
                     default: {
@@ -410,7 +460,7 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                     self._printerErrorDisconnectNotification = new PNotify({
                         title: title,
                         text: text,
-                        type: "error",
+                        type: severity,
                         hide: false
                     });
                 }
@@ -438,6 +488,8 @@ function DataUpdater(allViewModels, connectCallback, disconnectCallback) {
                 });
             } else if (type === "ConnectivityChanged") {
                 ONLINE = payload.new;
+            } else if (type === "SettingsUpdated") {
+                self._configHash = payload.config_hash;
             }
 
             var legacyEventHandlers = {

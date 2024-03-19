@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 This module bundles all of OctoPrint's supported plugin implementation types as well as their common parent
 class, :class:`OctoPrintPlugin`.
@@ -15,7 +14,6 @@ Please note that the plugin implementation types are documented in the section
    :members:
 
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
@@ -124,6 +122,14 @@ class OctoPrintPlugin(Plugin):
         if not os.path.isdir(self._data_folder):
             os.makedirs(self._data_folder)
         return self._data_folder
+
+    def on_plugin_pending_uninstall(self):
+        """
+        Called by the plugin manager when the plugin is pending uninstall. Override this to react to the event.
+
+        NOT called during plugin uninstalls triggered outside of OctoPrint!
+        """
+        pass
 
 
 class ReloadNeedingPlugin(Plugin):
@@ -325,6 +331,18 @@ class TemplatePlugin(OctoPrintPlugin, ReloadNeedingPlugin):
        wrapper div and the link in the navigation will have the additional classes and styles applied as defined via the
        configuration through :func:`get_template_configs`.
 
+    Webcam
+       Plugins can provide a custom webcam view for watching a camera stream, which will be embedded into the "Control"
+       panel of OctoPrint's default UI.
+
+       The included template must be called ``<plugin identifier>_webcam.jinja2`` (e.g. ``myplugin_webcam.jinja2``) unless
+       overridden by the configuration supplied through :func:`get_template_configs`.
+
+       The template will be already wrapped into the necessary structure, plugins just need to supply the pure content. The
+       wrapper div will have the additional classes and styles applied as defined via the configuration through :func:`get_template_configs`.
+
+       .. versionadded:: 1.9.0
+
     Wizards
        Plugins may define wizard dialogs to display to the user if necessary (e.g. in case of missing information that
        needs to be queried from the user to make the plugin work). Note that with the current implementation, all
@@ -391,6 +409,10 @@ class TemplatePlugin(OctoPrintPlugin, ReloadNeedingPlugin):
 
     ``TemplatePlugin`` is a :class:`~octoprint.plugin.core.ReloadNeedingPlugin`.
     """
+
+    @property
+    def template_folder_key(self):
+        return f"plugin_{self._identifier}"
 
     def get_template_configs(self):
         """
@@ -490,7 +512,7 @@ class TemplatePlugin(OctoPrintPlugin, ReloadNeedingPlugin):
               :widths: 5 95
 
               * - icon
-                - Icon to use for the sidebar header, should be the name of a Font Awesome icon without the leading ``icon-`` part.
+                - Icon to use for the sidebar header, should be the full name of a Font Awesome icon including the ``fas``/``far``/``fab`` prefix, eg. ``fas fa-plus``.
               * - template_header
                 - Additional template to include in the head section of the sidebar item. For an example of this, see the additional
                   options included in the "Files" section.
@@ -508,12 +530,22 @@ class TemplatePlugin(OctoPrintPlugin, ReloadNeedingPlugin):
            .. list-table::
               :widths: 5 95
 
-              * - classes_link
-                - Like ``classes`` but only applied to the link in the navigation.
               * - classes_content
                 - Like ``classes`` but only applied to the content pane itself.
+              * - styles_content
+                - Like ``styles`` but only applied to the content pane itself.
+              * - classes_link
+                - Like ``classes`` but only applied to the link in the navigation.
               * - styles_link
                 - Like ``styles`` but only applied to the link in the navigation.
+
+        ``webcam`` type
+
+           .. list-table::
+              :widths: 5 95
+
+              * - classes_content
+                - Like ``classes`` but only applied to the content pane itself.
               * - styles_content
                 - Like ``styles`` but only applied to the content pane itself.
 
@@ -590,7 +622,7 @@ class UiPlugin(OctoPrintPlugin, SortablePlugin):
 
     OctoPrint will query whether your mixin implementation will handle a
     provided request by calling :meth:`~octoprint.plugin.UiPlugin.will_handle_ui` with the Flask
-    `Request <http://flask.pocoo.org/docs/0.10/api/#flask.Request>`_ object as
+    `Request <https://flask.palletsprojects.com/api/#flask.Request>`_ object as
     parameter. If you plugin returns `True` here, OctoPrint will next call
     :meth:`~octoprint.plugin.UiPlugin.on_ui_render` with a few parameters like
     - again - the Flask Request object and the render keyword arguments as
@@ -621,12 +653,10 @@ class UiPlugin(OctoPrintPlugin, SortablePlugin):
     at it being a mobile device:
 
     .. onlineinclude:: https://raw.githubusercontent.com/OctoPrint/Plugin-Examples/master/dummy_mobile_ui/__init__.py
-       :linenos:
        :tab-width: 4
        :caption: `dummy_mobile_ui/__init__.py <https://github.com/OctoPrint/Plugin-Examples/blob/master/dummy_mobile_ui/__init__.py>`_
 
     .. onlineinclude:: https://raw.githubusercontent.com/OctoPrint/Plugin-Examples/master/dummy_mobile_ui/templates/dummy_mobile_ui_index.jinja2
-       :linenos:
        :tab-width: 4
        :caption: `dummy_mobile_ui/templates/dummy_mobile_ui_index.jinja2 <https://github.com/OctoPrint/Plugin-Examples/blob/master/dummy_mobile_ui/templates/dummy_mobile_ui_index.jinja2>`_
 
@@ -668,7 +698,7 @@ class UiPlugin(OctoPrintPlugin, SortablePlugin):
         ``UiPlugin.will_handle_ui``.
 
         Arguments:
-            request (flask.Request): A Flask `Request <http://flask.pocoo.org/docs/0.10/api/#flask.Request>`_
+            request (flask.Request): A Flask `Request <https://flask.palletsprojects.com/api/#flask.Request>`_
                 object.
 
         Returns:
@@ -753,12 +783,12 @@ class UiPlugin(OctoPrintPlugin, SortablePlugin):
             now (datetime.datetime): The datetime instance representing "now"
                 for this request, in case your plugin implementation needs this
                 information.
-            request (flask.Request): A Flask `Request <http://flask.pocoo.org/docs/0.10/api/#flask.Request>`_ object.
+            request (flask.Request): A Flask `Request <https://flask.palletsprojects.com/api/#flask.Request>`_ object.
             render_kwargs (dict): The (cached) render keyword arguments that
                 would usually be provided to the core UI render function.
 
         Returns:
-            flask.Response: Should return a Flask `Response <http://flask.pocoo.org/docs/0.10/api/#flask.Response>`_
+            flask.Response: Should return a Flask `Response <https://flask.palletsprojects.com/api/#flask.Response>`_
                 object that can be served to the requesting client directly. May be
                 created with ``flask.make_response`` combined with something like
                 ``flask.render_template``.
@@ -1165,7 +1195,7 @@ class SimpleApiPlugin(OctoPrintPlugin):
     """
     Utilizing the ``SimpleApiPlugin`` mixin plugins may implement a simple API based around one GET resource and one
     resource accepting JSON commands POSTed to it. This is the easy alternative for plugin's which don't need the
-    full power of a `Flask Blueprint <http://flask.pocoo.org/docs/0.10/blueprints/>`_ that the :class:`BlueprintPlugin`
+    full power of a `Flask Blueprint <https://flask.palletsprojects.com/blueprints/>`_ that the :class:`BlueprintPlugin`
     mixin offers.
 
     Use this mixin if all you need to do is return some kind of dynamic data to your plugin from the backend
@@ -1181,7 +1211,6 @@ class SimpleApiPlugin(OctoPrintPlugin):
     Take this example of a plugin registered under plugin identifier ``mysimpleapiplugin``:
 
     .. code-block:: python
-       :linenos:
 
        import octoprint.plugin
 
@@ -1291,7 +1320,7 @@ class SimpleApiPlugin(OctoPrintPlugin):
     def on_api_get(self, request):
         """
         Called by OctoPrint upon a GET request to ``/api/plugin/<plugin identifier>``. ``request`` will contain the
-        received `Flask request object <http://flask.pocoo.org/docs/0.9/api/#flask.Request>`_ which you may evaluate
+        received `Flask request object <https://flask.palletsprojects.com/api/#flask.Request>`_ which you may evaluate
         for additional arguments supplied with the request.
 
         If your plugin returns nothing here, OctoPrint will return an empty response with return code ``204 No content``
@@ -1310,14 +1339,13 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
     The ``BlueprintPlugin`` mixin allows plugins to define their own full fledged endpoints for whatever purpose,
     be it a more sophisticated API than what is possible via the :class:`SimpleApiPlugin` or a custom web frontend.
 
-    The mechanism at work here is `Flask's <http://flask.pocoo.org/>`_ own `Blueprint mechanism <http://flask.pocoo.org/docs/0.10/blueprints/>`_.
+    The mechanism at work here is `Flask's <https://flask.palletsprojects.com/>`_ own `Blueprint mechanism <https://flask.palletsprojects.com/blueprints/>`_.
 
     The mixin automatically creates a blueprint for you that will be registered under ``/plugin/<plugin identifier>/``.
     All you need to do is decorate all of your view functions with the :func:`route` decorator,
     which behaves exactly the same like Flask's regular ``route`` decorators. Example:
 
     .. code-block:: python
-       :linenos:
 
        import octoprint.plugin
        import flask
@@ -1342,8 +1370,39 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
 
        flask.url_for("plugin.myblueprintplugin.myEcho") # will return "/plugin/myblueprintplugin/echo"
 
+    .. warning::
+
+       As of OctoPrint 1.8.3, endpoints provided through a ``BlueprintPlugin`` do **not** automatically fall under
+       OctoPrint's :ref:`CSRF protection <sec-api-general-csrf>`, for reasons of backwards compatibility. There will be a short grace period before this changes. You
+       can and should however already opt into CSRF protection for your endpoints by implementing ``is_blueprint_csrf_protected``
+       and returning ``True`` from it. You can exempt certain endpoints from CSRF protection by decorating them with
+       ``@octoprint.plugin.BlueprintPlugin.csrf_exempt``.
+
+       .. code-block:: python
+
+          class MyPlugin(octoprint.plugin.BlueprintPlugin):
+              @octoprint.plugin.BlueprintPlugin.route("/hello_world", methods=["GET"])
+              def hello_world(self):
+                  # This is a GET request and thus not subject to CSRF protection
+                  return "Hello world!"
+
+              @octoprint.plugin.BlueprintPlugin.route("/hello_you", methods=["POST"])
+              def hello_you(self):
+                  # This is a POST request and thus subject to CSRF protection. It is not exempt.
+                  return "Hello you!"
+
+              @octoprint.plugin.BlueprintPlugin.route("/hello_me", methods=["POST"])
+              @octoprint.plugin.BlueprintPlugin.csrf_exempt()
+              def hello_me(self):
+                  # This is a POST request and thus subject to CSRF protection, but this one is exempt.
+                  return "Hello me!"
+
+              def is_blueprint_csrf_protected(self):
+                  return True
 
     ``BlueprintPlugin`` implements :class:`~octoprint.plugins.core.RestartNeedingPlugin`.
+
+    .. versionchanged:: 1.8.3
     """
 
     @staticmethod
@@ -1352,8 +1411,8 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
         A decorator to mark view methods in your BlueprintPlugin subclass. Works just the same as Flask's
         own ``route`` decorator available on blueprints.
 
-        See `the documentation for flask.Blueprint.route <http://flask.pocoo.org/docs/0.10/api/#flask.Blueprint.route>`_
-        and `the documentation for flask.Flask.route <http://flask.pocoo.org/docs/0.10/api/#flask.Flask.route>`_ for more
+        See `the documentation for flask.Blueprint.route <https://flask.palletsprojects.com/api/#flask.Blueprint.route>`_
+        and `the documentation for flask.Flask.route <https://flask.palletsprojects.com/api/#flask.Flask.route>`_ for more
         information.
         """
 
@@ -1362,7 +1421,7 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
         def decorator(f):
             # We attach the decorator parameters directly to the function object, because that's the only place
             # we can access right now.
-            # This neat little trick was adapter from the Flask-Classy project: https://pythonhosted.org/Flask-Classy/
+            # This neat little trick was adapted from the Flask-Classy project: https://pythonhosted.org/Flask-Classy/
             if not hasattr(f, "_blueprint_rules") or f._blueprint_rules is None:
                 f._blueprint_rules = defaultdict(list)
             f._blueprint_rules[f.__name__].append((rule, options))
@@ -1376,8 +1435,8 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
         A decorator to mark errorhandlings methods in your BlueprintPlugin subclass. Works just the same as Flask's
         own ``errorhandler`` decorator available on blueprints.
 
-        See `the documentation for flask.Blueprint.errorhandler <http://flask.pocoo.org/docs/0.10/api/#flask.Blueprint.errorhandler>`_
-        and `the documentation for flask.Flask.errorhandler <http://flask.pocoo.org/docs/0.10/api/#flask.Flask.errorhandler>`_ for more
+        See `the documentation for flask.Blueprint.errorhandler <https://flask.palletsprojects.com/api/#flask.Blueprint.errorhandler>`_
+        and `the documentation for flask.Flask.errorhandler <https://flask.palletsprojects.com/api/#flask.Flask.errorhandler>`_ for more
         information.
 
         .. versionadded:: 1.3.0
@@ -1391,6 +1450,27 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
             ):
                 f._blueprint_error_handler = defaultdict(list)
             f._blueprint_error_handler[f.__name__].append(code_or_exception)
+            return f
+
+        return decorator
+
+    @staticmethod
+    def csrf_exempt():
+        """
+        A decorator to mark a view method in your BlueprintPlugin as exempt from :ref:`CSRF protection <sec-api-general-csrf>`. This makes sense
+        if you offer an authenticated API for a certain workflow (see e.g. the bundled appkeys plugin) but in most
+        cases should not be needed.
+
+        .. versionadded:: 1.8.3
+        """
+
+        def decorator(f):
+            if (
+                not hasattr(f, "_blueprint_csrf_exempt")
+                or f._blueprint_csrf_exempt is None
+            ):
+                f._blueprint_csrf_exempt = set()
+            f._blueprint_csrf_exempt.add(f.__name__)
             return f
 
         return decorator
@@ -1412,24 +1492,29 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
 
         import flask
 
+        from octoprint.server.util.csrf import add_exempt_view
+
         kwargs = self.get_blueprint_kwargs()
-        blueprint = flask.Blueprint(
-            "plugin." + self._identifier, self._identifier, **kwargs
-        )
+        blueprint = flask.Blueprint(self._identifier, self._identifier, **kwargs)
 
         # we now iterate over all members of ourselves and look if we find an attribute
         # that has data originating from one of our decorators - we ignore anything
         # starting with a _ to only handle public stuff
-        for member in [member for member in dir(self) if not member.startswith("_")]:
+        for member in [x for x in dir(self) if not x.startswith("_")]:
             f = getattr(self, member)
 
             if hasattr(f, "_blueprint_rules") and member in f._blueprint_rules:
                 # this attribute was annotated with our @route decorator
                 for blueprint_rule in f._blueprint_rules[member]:
                     rule, options = blueprint_rule
-                    blueprint.add_url_rule(
-                        rule, options.pop("endpoint", f.__name__), view_func=f, **options
-                    )
+                    endpoint = options.pop("endpoint", f.__name__)
+                    blueprint.add_url_rule(rule, endpoint, view_func=f, **options)
+
+                    if (
+                        hasattr(f, "_blueprint_csrf_exempt")
+                        and member in f._blueprint_csrf_exempt
+                    ):
+                        add_exempt_view(f"plugin.{self._identifier}.{endpoint}")
 
             if (
                 hasattr(f, "_blueprint_error_handler")
@@ -1479,6 +1564,29 @@ class BlueprintPlugin(OctoPrintPlugin, RestartNeedingPlugin):
         return True
 
     # noinspection PyMethodMayBeStatic
+    def is_blueprint_csrf_protected(self):
+        """
+        Whether a blueprint's endpoints are :ref:`CSRF protected <sec-api-general-csrf>`. For now, this defaults to ``False`` to leave it up to
+        plugins to decide which endpoints *should* be protected. Long term, this will default to ``True`` and hence
+        enforce protection unless a plugin opts out by returning False here.
+
+        If you do not override this method in your mixin implementation, a warning will be logged to the console
+        to alert you of the requirement to make a decision here and to not rely on the default implementation, due to the
+        forthcoming change in implemented default behaviour.
+
+        .. versionadded:: 1.8.3
+        """
+        self._logger.warning(
+            "The Blueprint of this plugin is relying on the default implementation of "
+            "is_blueprint_csrf_protected (newly added in OctoPrint 1.8.3), which in a future version will "
+            "be switched from False to True for security reasons. Plugin authors should ensure they explicitly "
+            "declare the CSRF protection status in their BlueprintPlugin mixin implementation. "
+            "Recommendation is to enable CSRF protection and exempt views that must not use it with the "
+            "octoprint.plugin.BlueprintPlugin.csrf_exempt decorator."
+        )
+        return False
+
+    # noinspection PyMethodMayBeStatic
     def get_blueprint_api_prefixes(self):
         """
         Return all prefixes of your endpoint that are an API that should be containing JSON only.
@@ -1498,11 +1606,28 @@ class SettingsPlugin(OctoPrintPlugin):
     Including the ``SettingsPlugin`` mixin allows plugins to store and retrieve their own settings within OctoPrint's
     configuration.
 
-    Plugins including the mixing will get injected an additional property ``self._settings`` which is an instance of
+    Plugins including the mixin will get injected an additional property ``self._settings`` which is an instance of
     :class:`PluginSettingsManager` already properly initialized for use by the plugin. In order for the manager to
     know about the available settings structure and default values upon initialization, implementing plugins will need
     to provide a dictionary with the plugin's default settings through overriding the method :func:`get_settings_defaults`.
     The defined structure will then be available to access through the settings manager available as ``self._settings``.
+
+    .. note::
+
+       Use the settings only to store configuration data or information that is relevant to the UI. Anything in the settings
+       is part of the hash that is used to determine whether a client's copy of the UI is still up to date or not. If you
+       store unrelated and possibly often changing information in the settings, you will force the client to reload the
+       UI without visible changes, which will lead to a bad user experience.
+
+       You may store additional data in your plugin's data folder instead, which is not part of the hash and whose path
+       can be retrieved through :func:`~
+       octoprint.plugin.types.OctoPrintPlugin.get_plugin_data_folder`, e.g.:
+
+       .. code-block:: python
+
+          data_folder = self.get_plugin_data_folder()
+          with open(os.path.join(data_folder, "some_file.txt"), "w") as f:
+            f.write("some data")
 
     If your plugin needs to react to the change of specific configuration values on the fly, e.g. to adjust the log level
     of a logger when the user changes a corresponding flag via the settings dialog, you can override the
@@ -2043,10 +2168,7 @@ class SlicerPlugin(OctoPrintPlugin):
         .. versionadded:: 1.3.7
         """
 
-        try:
-            from os import scandir
-        except ImportError:
-            from scandir import scandir
+        from os import scandir
 
         import octoprint.util
 
@@ -2069,15 +2191,10 @@ class SlicerPlugin(OctoPrintPlugin):
         """
         import os
 
-        try:
-            from os import scandir
-        except ImportError:
-            from scandir import scandir
-
         lms = [os.stat(profile_path).st_mtime]
         lms += [
             os.stat(entry.path).st_mtime
-            for entry in scandir(profile_path)
+            for entry in os.scandir(profile_path)
             if entry.name.endswith(".profile")
         ]
         return max(lms)
@@ -2241,3 +2358,32 @@ class ProgressPlugin(OctoPrintPlugin):
         :param int progress:                Current progress as a value between 0 and 100
         """
         pass
+
+
+class WebcamProviderPlugin(OctoPrintPlugin):
+    """
+    The ``WebcamProviderPlugin`` can be used to provide one or more webcams visible on the frontend and used for snapshots/timelapses.
+
+    For an example of how to utilize this, see the bundled ``classicwebcam`` plugin, or the ``testpicture`` plugin available `here <https://github.com/OctoPrint/OctoPrint-Testpicture>`_.
+    """
+
+    def get_webcam_configurations(self):
+        """
+        Used to retrieve a list of available webcams
+
+        Returns:
+            A list of :class:`~octoprint.schema.webcam.Webcam`: The available webcams, can be empty if none available.
+        """
+
+        return []
+
+    def take_webcam_snapshot(self, webcamName):
+        """
+        Used to take a JPEG snapshot of the webcam. This method may raise an exception, you can expect failures to be handled.
+
+         :param string webcamName: The name of the webcam to take a snapshot of as given by the configurations
+
+        Returns:
+            An iterator over bytes of the JPEG image
+        """
+        raise NotImplementedError()

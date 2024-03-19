@@ -25,7 +25,8 @@ $(function () {
                 count: 1,
                 offsets: [[0, 0]],
                 nozzleDiameter: 0.4,
-                sharedNozzle: false
+                sharedNozzle: false,
+                defaultExtrusionLength: 5
             }
         };
     };
@@ -72,6 +73,7 @@ $(function () {
         self.extruders = ko.observable();
         self.extruderOffsets = ko.observableArray();
         self.sharedNozzle = ko.observable();
+        self.defaultExtrusionLength = ko.observable();
 
         self.axisXSpeed = ko.observable();
         self.axisYSpeed = ko.observable();
@@ -122,6 +124,14 @@ $(function () {
             return !self.name();
         });
 
+        self.sizeInvalid = ko.pureComputed(function () {
+            return (
+                !(self.volumeWidth() > 0 && self.volumeWidth() < 10000) ||
+                !(self.volumeDepth() > 0 && self.volumeDepth() < 10000) ||
+                !(self.volumeHeight() > 0 && self.volumeHeight() < 10000)
+            );
+        });
+
         self.identifierInvalid = ko.pureComputed(function () {
             var identifier = self.identifier();
             var placeholder = self.identifierPlaceholder();
@@ -163,7 +173,9 @@ $(function () {
         });
 
         self.valid = function () {
-            return !self.nameInvalid() && !self.identifierInvalid();
+            return (
+                !self.nameInvalid() && !self.identifierInvalid() && !self.sizeInvalid()
+            );
         };
 
         self.availableColors = ko.observable([
@@ -233,6 +245,7 @@ $(function () {
 
             self.nozzleDiameter(data.extruder.nozzleDiameter);
             self.sharedNozzle(data.extruder.sharedNozzle);
+            self.defaultExtrusionLength(data.extruder.defaultExtrusionLength);
             self.extruders(data.extruder.count);
             var offsets = [];
             if (data.extruder.count > 1) {
@@ -270,11 +283,32 @@ $(function () {
                 }
                 return v;
             };
-            var validFloat = function (value, def) {
-                return valid(value, parseFloat, def);
+            var runChecks = function (value, def, checks) {
+                if (checks.gt !== undefined) {
+                    if (!(value > checks.gt)) {
+                        return def;
+                    }
+                }
+                if (checks.lt !== undefined) {
+                    if (!(value < checks.lt)) {
+                        return def;
+                    }
+                }
+                return value;
             };
-            var validInt = function (value, def) {
-                return valid(value, parseInt, def);
+            var validFloat = function (value, def, checks) {
+                var v = valid(value, parseFloat, def);
+                if (checks) {
+                    v = runChecks(value, def, checks);
+                }
+                return v;
+            };
+            var validInt = function (value, def, checks) {
+                var v = valid(value, parseInt, def);
+                if (checks) {
+                    v = runChecks(value, def, checks);
+                }
+                return v;
             };
 
             var profile = {
@@ -283,38 +317,60 @@ $(function () {
                 color: self.color(),
                 model: self.model(),
                 volume: {
-                    width: validFloat(self.volumeWidth(), defaultProfile.volume.width),
-                    depth: validFloat(self.volumeDepth(), defaultProfile.volume.depth),
-                    height: validFloat(self.volumeHeight(), defaultProfile.volume.height),
+                    width: validFloat(self.volumeWidth(), defaultProfile.volume.width, {
+                        gt: 0,
+                        lt: 10000
+                    }),
+                    depth: validFloat(self.volumeDepth(), defaultProfile.volume.depth, {
+                        gt: 0,
+                        lt: 10000
+                    }),
+                    height: validFloat(
+                        self.volumeHeight(),
+                        defaultProfile.volume.height,
+                        {gt: 0, lt: 10000}
+                    ),
                     formFactor: self.volumeFormFactor(),
                     origin: self.volumeOrigin()
                 },
                 heatedBed: self.heatedBed(),
                 heatedChamber: self.heatedChamber(),
                 extruder: {
-                    count: parseInt(self.extruders()),
+                    count: runChecks(parseInt(self.extruders()), 1, {gt: 0, lt: 100}),
                     offsets: [[0.0, 0.0]],
                     nozzleDiameter: validFloat(
                         self.nozzleDiameter(),
                         defaultProfile.extruder.nozzleDiameter
                     ),
-                    sharedNozzle: self.sharedNozzle()
+                    sharedNozzle: self.sharedNozzle(),
+                    defaultExtrusionLength: validInt(
+                        self.defaultExtrusionLength(),
+                        defaultProfile.extruder.defaultExtrusionLength
+                    )
                 },
                 axes: {
                     x: {
-                        speed: validInt(self.axisXSpeed(), defaultProfile.axes.x.speed),
+                        speed: validInt(self.axisXSpeed(), defaultProfile.axes.x.speed, {
+                            gt: 0
+                        }),
                         inverted: self.axisXInverted()
                     },
                     y: {
-                        speed: validInt(self.axisYSpeed(), defaultProfile.axes.y.speed),
+                        speed: validInt(self.axisYSpeed(), defaultProfile.axes.y.speed, {
+                            gt: 0
+                        }),
                         inverted: self.axisYInverted()
                     },
                     z: {
-                        speed: validInt(self.axisZSpeed(), defaultProfile.axes.z.speed),
+                        speed: validInt(self.axisZSpeed(), defaultProfile.axes.z.speed, {
+                            gt: 0
+                        }),
                         inverted: self.axisZInverted()
                     },
                     e: {
-                        speed: validInt(self.axisESpeed(), defaultProfile.axes.e.speed),
+                        speed: validInt(self.axisESpeed(), defaultProfile.axes.e.speed, {
+                            gt: 0
+                        }),
                         inverted: self.axisEInverted()
                     }
                 }
@@ -696,9 +752,12 @@ $(function () {
 
         self.onSettingsShown = self.requestData;
 
-        self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
-            self.requestData();
-        };
+        self.onUserPermissionsChanged =
+            self.onUserLoggedIn =
+            self.onUserLoggedOut =
+                function () {
+                    self.requestData();
+                };
     }
 
     OCTOPRINT_VIEWMODELS.push({

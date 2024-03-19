@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
-# noinspection PyCompatibility
 import concurrent.futures
 import logging.handlers
 import os
@@ -12,7 +8,7 @@ import time
 class AsyncLogHandlerMixin(logging.Handler):
     def __init__(self, *args, **kwargs):
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        super(AsyncLogHandlerMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def emit(self, record):
         if getattr(self._executor, "_shutdown", False):
@@ -25,18 +21,18 @@ class AsyncLogHandlerMixin(logging.Handler):
 
     def _emit(self, record):
         # noinspection PyUnresolvedReferences
-        super(AsyncLogHandlerMixin, self).emit(record)
+        super().emit(record)
 
     def close(self):
         self._executor.shutdown(wait=True)
-        super(AsyncLogHandlerMixin, self).close()
+        super().close()
 
 
 class CleaningTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
     def __init__(self, *args, **kwargs):
         kwargs["encoding"] = kwargs.get("encoding", "utf-8")
 
-        super(CleaningTimedRotatingFileHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # clean up old files on handler start
         if self.backupCount > 0:
@@ -49,14 +45,14 @@ class OctoPrintLogHandler(AsyncLogHandlerMixin, CleaningTimedRotatingFileHandler
 
     def __init__(self, *args, **kwargs):
         kwargs["encoding"] = kwargs.get("encoding", "utf-8")
-        super(OctoPrintLogHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def registerRolloverCallback(cls, callback, *args, **kwargs):
         cls.rollover_callbacks.append((callback, args, kwargs))
 
     def doRollover(self):
-        super(OctoPrintLogHandler, self).doRollover()
+        super().doRollover()
 
         for rcb in self.rollover_callbacks:
             callback, args, kwargs = rcb
@@ -70,7 +66,6 @@ class OctoPrintStreamHandler(AsyncLogHandlerMixin, logging.StreamHandler):
 class TriggeredRolloverLogHandler(
     AsyncLogHandlerMixin, logging.handlers.RotatingFileHandler
 ):
-
     do_rollover = False
     suffix_template = "%Y-%m-%d_%H-%M-%S"
     file_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
@@ -81,7 +76,7 @@ class TriggeredRolloverLogHandler(
 
     def __init__(self, *args, **kwargs):
         kwargs["encoding"] = kwargs.get("encoding", "utf-8")
-        super(TriggeredRolloverLogHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.cleanupFiles()
 
     def shouldRollover(self, record):
@@ -141,9 +136,17 @@ class PluginTimingsLogHandler(TriggeredRolloverLogHandler):
     pass
 
 
+class TornadoLogHandler(CleaningTimedRotatingFileHandler):
+    pass
+
+
+class AuthLogHandler(CleaningTimedRotatingFileHandler):
+    pass
+
+
 class RecordingLogHandler(logging.Handler):
     def __init__(self, target=None, *args, **kwargs):
-        super(RecordingLogHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._buffer = []
         self._target = target
 

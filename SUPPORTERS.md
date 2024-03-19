@@ -8,76 +8,93 @@ thanks to everyone who contributed!
 
   * 3D-TECH
   * 3DPrinterOS
-  * Arnljot Arntsen
-  * Artillery 3D
+  * Accalia Elementia
+  * Al Mucci
+  * Alex Young
+  * Anthony Gainsborough
   * Ash King
   * BigTreeTech
   * Boris Hussein
   * Brad Jackson
-  * BuildBee
+  * Bradford Benn
+  * Brandon Robertson
+  * Bruce Meyer
+  * Chloe Martin
+  * Chris Heerschap
   * Christian Petropolis
   * Christian Wolf
   * Christian Würthner
   * Christoph Sigrist
-  * Creality3D
-  * David Bounds
+  * Christopher Heiny
+  * Cognite Solutions
+  * Coltarus Halo
+  * CooperSpartan
+  * David OMeara
+  * David Pitman
   * DeltaMaker 3D Printers
   * Dennis Breining
-  * Douglas Floyd
+  * Dima Gorbenko
+  * Doc
   * Dr. Frank Wester
-  * Eric Betts
+  * Ed Crump
+  * Erik Ableson
   * Ernesto Martinez
+  * Fiberpunk
   * Franziska Kunsmann
-  * George Robles
-  * Greg Holloway
+  * George Jeng
+  * Greg Bickel
   * Hog Duske
-  * Itay Shem-tov
-  * James Mackay
+  * IOHK
+  * James Fryman
+  * Jason Kitchens
+  * Jay Moran
+  * jaystar2242
+  * JCsGotThis
   * Jeff Moe
   * Jeremy Cole
-  * Joshua Wills
+  * John Cassel
   * Julian Melo
   * Justin Kaufman
   * Kaile Riser
+  * kantlivelong@gmail.com
   * Kazuhiro Ogura
-  * Kelly C McNiece
+  * Keenan Newton
   * Kenneth Jiang
+  * Kevin Luff
+  * Khaled Allen
+  * Kureemii
   * Kurt Wubbels
-  * Kyle Menigoz
-  * LA 3D Printer Repair
   * Lachlan Bell
-  * Lee Dohm
+  * Laser-Lance
   * Lefteris Lertas
   * LulzBot
   * Makespace Madrid
+  * Marco van Dijk
+  * Mark Greenwald
+  * Mark Robards
   * Mark Walker
+  * Martin Schmitt
+  * mcbriers
   * Michael Aumock
-  * Mike Kershaw
-  * Miles Flavel
+  * Michael Badagliacco
+  * Michael Duergner
+  * Mike Labanov
   * Mosaic Manufacturing
-  * Nat Friedman
-  * Neil R. Goldberg
+  * Nick Chestnut
   * Norman Jaffe
-  * Peopoly
+  * Obico
+  * Paul McMaster
   * Pete Barnwell
-  * Raise3D
   * Randy C. Will
   * Ranjib Dey
-  * Richard McGuire
-  * Richard Michaud
   * Richard Stocks
+  * Rik KM
   * Robert Gusek
-  * Ronald Griehsler
-  * Sebastien Andrivet
+  * SimplyPrint
+  * Sinie47
   * Stefan Krister
-  * Steve Dougherty
-  * Steve Thompson
-  * Sven Mueller
-  * TH3D
-  * The Spaghetti Detective
-  * TJ Horner
-  * Ulderico Cirello
+  * TheWebMachine
+  * Tideline 3D
   * Ulrich Kempken
-  * Yehuda Katz
 
-and 2285 more wonderful people pledging on the [Patreon campaign](https://patreon.com/foosel) or via [GitHub Sponsors](https://github.com/users/foosel/sponsorship)!
+and 3233 more wonderful people pledging on the [Patreon campaign](https://patreon.com/foosel), on [GitHub Sponsors](https://github.com/users/foosel/sponsorship), via [Ko-fi](https://ko-fi.com/octoprint) or [Donorbox](https://donorbox.org/support-octoprint?recurring=true)!

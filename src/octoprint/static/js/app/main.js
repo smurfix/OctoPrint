@@ -202,6 +202,21 @@ $(function () {
 
     //~~ AJAX setup
 
+    $.ajaxSetup({
+        beforeSend: function (xhr, settings) {
+            // we already do that in the js client lib, but a lot of plugins don't use
+            // that but rather use $.ajax directly, so we need to do it here as well
+            var csrfToken = OctoPrint.getCookie("csrf_token");
+            if (
+                !/^(GET|HEAD|OPTIONS)$/.test(settings.type) &&
+                csrfToken &&
+                !this.crossDomain
+            ) {
+                xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+            }
+        }
+    });
+
     // work around a stupid iOS6 bug where ajax requests get cached and only work once, as described at
     // http://stackoverflow.com/questions/12506897/is-safari-on-ios-6-caching-ajax-results
     $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
@@ -219,7 +234,8 @@ $(function () {
     $.widget("blueimp.fileupload", $.blueimp.fileupload, {
         options: {
             dropZone: null,
-            pasteZone: null
+            pasteZone: null,
+            headers: OctoPrint.getRequestHeaders("POST")
         }
     });
 
@@ -404,9 +420,8 @@ $(function () {
         if (!additionalBindings.hasOwnProperty(viewModelId)) {
             additionalBindings[viewModelId] = viewModelBindTargets;
         } else {
-            additionalBindings[viewModelId] = additionalBindings[viewModelId].concat(
-                viewModelBindTargets
-            );
+            additionalBindings[viewModelId] =
+                additionalBindings[viewModelId].concat(viewModelBindTargets);
         }
     });
 
@@ -445,7 +460,7 @@ $(function () {
                 };
             }
 
-            // make sure we have atleast a function
+            // make sure we have at least a function
             if (!_.isFunction(viewModel.construct)) {
                 log.error("No function to instantiate with", viewModel);
                 continue;
@@ -461,17 +476,18 @@ $(function () {
             viewModel.additionalNames = viewModel.additionalNames || [];
 
             // make sure all value's are set and in an array
-            _.each(["dependencies", "elements", "optional", "additionalNames"], function (
-                key
-            ) {
-                if (viewModel[key] === undefined) {
-                    viewModel[key] = [];
-                } else {
-                    viewModel[key] = _.isArray(viewModel[key])
-                        ? viewModel[key]
-                        : [viewModel[key]];
+            _.each(
+                ["dependencies", "elements", "optional", "additionalNames"],
+                function (key) {
+                    if (viewModel[key] === undefined) {
+                        viewModel[key] = [];
+                    } else {
+                        viewModel[key] = _.isArray(viewModel[key])
+                            ? viewModel[key]
+                            : [viewModel[key]];
+                    }
                 }
-            });
+            );
 
             // make sure that we don't have two view models going by the same name
             if (_.has(viewModelMap, viewModel.name)) {
@@ -533,7 +549,7 @@ $(function () {
             }
         }
 
-        // anything that's now in the postponed list has to be readded to the unprocessedViewModels
+        // anything that's now in the postponed list has to be re-added to the unprocessedViewModels
         unprocessedViewModels = unprocessedViewModels.concat(postponed);
 
         // if we still have the same amount of items in our list of unprocessed view models it means that we

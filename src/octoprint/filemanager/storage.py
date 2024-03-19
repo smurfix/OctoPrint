@@ -1,33 +1,29 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
 import copy
-import io
 import logging
 import os
 import shutil
+from contextlib import contextmanager
+from os import scandir, walk
 
 import pylru
 
-try:
-    from os import scandir, walk
-except ImportError:
-    from scandir import scandir, walk
-
-from contextlib import contextmanager
-
-from past.builtins import basestring
-
 import octoprint.filemanager
-from octoprint.util import atomic_write, is_hidden_path, time_this, to_bytes, to_unicode
+from octoprint.util import (
+    atomic_write,
+    is_hidden_path,
+    time_this,
+    to_bytes,
+    to_unicode,
+    yaml,
+)
 from octoprint.util.files import sanitize_filename
 
 
-class StorageInterface(object):
+class StorageInterface:
     """
     Interface of storage adapters for OctoPrint.
     """
@@ -168,7 +164,7 @@ class StorageInterface(object):
 
         :param string path:          the path of the new folder
         :param bool ignore_existing: if set to True, no error will be raised if the folder to be added already exists
-        :param unicode display:      display name of the folder
+        :param str display:          display name of the folder
         :return: the sanitized name of the new folder to be used for future references to the folder
         """
         raise NotImplementedError()
@@ -224,7 +220,7 @@ class StorageInterface(object):
         :param list links:             any links to add with the file
         :param bool allow_overwrite:   if set to True no error will be raised if the file already exists and the existing file
                                        and its metadata will just be silently overwritten
-        :param unicode display:        display name of the file
+        :param str display:            display name of the file
         :return: the sanitized name of the file to be used for future references to it
         """
         raise NotImplementedError()
@@ -449,8 +445,7 @@ class StorageError(Exception):
     NOT_EMPTY = "not_empty"
 
     def __init__(self, message, code=None, cause=None):
-        BaseException.__init__(self)
-        self.message = message
+        Exception.__init__(self, message)
         self.cause = cause
 
         if code is None:
@@ -484,7 +479,7 @@ class LocalFileStorage(StorageInterface):
             os.makedirs(self.basefolder)
         if not os.path.exists(self.basefolder) or not os.path.isdir(self.basefolder):
             raise StorageError(
-                "{basefolder} is not a valid directory".format(**locals()),
+                f"{basefolder} is not a valid directory",
                 code=StorageError.INVALID_DIRECTORY,
             )
 
@@ -505,9 +500,7 @@ class LocalFileStorage(StorageInterface):
         self._initialize_metadata()
 
     def _initialize_metadata(self):
-        self._logger.info(
-            "Initializing the file metadata for {}...".format(self.basefolder)
-        )
+        self._logger.info(f"Initializing the file metadata for {self.basefolder}...")
 
         old_metadata_path = os.path.join(self.basefolder, "metadata.yaml")
         backup_path = os.path.join(self.basefolder, "metadata.yaml.backup")
@@ -515,10 +508,7 @@ class LocalFileStorage(StorageInterface):
         if os.path.exists(old_metadata_path):
             # load the old metadata file
             try:
-                with io.open(old_metadata_path, "rt", encoding="utf-8") as f:
-                    import yaml
-
-                    self._old_metadata = yaml.safe_load(f)
+                self._old_metadata = yaml.load_from_file(path=old_metadata_path)
             except Exception:
                 self._logger.exception("Error while loading old metadata file")
 
@@ -539,7 +529,7 @@ class LocalFileStorage(StorageInterface):
             self._list_folder(self.basefolder)
 
         self._logger.info(
-            "... file metadata for {} initialized successfully.".format(self.basefolder)
+            f"... file metadata for {self.basefolder} initialized successfully."
         )
 
     @property
@@ -550,8 +540,7 @@ class LocalFileStorage(StorageInterface):
         if path:
             path = self.sanitize_path(path)
 
-        for entry in self._analysis_backlog_generator(path):
-            yield entry
+        yield from self._analysis_backlog_generator(path)
 
     def _analysis_backlog_generator(self, path=None):
         if path is None:
@@ -681,7 +670,7 @@ class LocalFileStorage(StorageInterface):
         if os.path.exists(folder_path):
             if not ignore_existing:
                 raise StorageError(
-                    "{name} does already exist in {path}".format(**locals()),
+                    f"{name} does already exist in {path}",
                     code=StorageError.ALREADY_EXISTS,
                 )
         else:
@@ -710,7 +699,7 @@ class LocalFileStorage(StorageInterface):
 
         if not empty and not recursive:
             raise StorageError(
-                "{name} in {path} is not empty".format(**locals()),
+                f"{name} in {path} is not empty",
                 code=StorageError.NOT_EMPTY,
             )
 
@@ -733,7 +722,7 @@ class LocalFileStorage(StorageInterface):
 
         if not os.path.exists(source_fullpath):
             raise StorageError(
-                "{} in {} does not exist".format(source_name, source_path),
+                f"{source_name} in {source_path} does not exist",
                 code=StorageError.INVALID_SOURCE,
             )
 
@@ -749,8 +738,8 @@ class LocalFileStorage(StorageInterface):
             and source_fullpath != destination_fullpath
         ):
             raise StorageError(
-                "{} does already exist in {}".format(destination_name, destination_path),
-                code=StorageError.INVALID_DESTINATION,
+                f"{destination_name} does already exist in {destination_path}",
+                code=StorageError.ALREADY_EXISTS,
             )
 
         source_meta = self._get_metadata_entry(source_path, source_name)
@@ -880,23 +869,19 @@ class LocalFileStorage(StorageInterface):
 
         if not octoprint.filemanager.valid_file_type(name):
             raise StorageError(
-                "{name} is an unrecognized file type".format(**locals()),
+                f"{name} is an unrecognized file type",
                 code=StorageError.INVALID_FILE,
             )
 
         file_path = os.path.join(path, name)
         if os.path.exists(file_path) and not os.path.isfile(file_path):
             raise StorageError(
-                "{name} does already exist in {path} and is not a file".format(
-                    **locals()
-                ),
+                f"{name} does already exist in {path} and is not a file",
                 code=StorageError.ALREADY_EXISTS,
             )
         if os.path.exists(file_path) and not allow_overwrite:
             raise StorageError(
-                "{name} does already exist in {path} and overwriting is prohibited".format(
-                    **locals()
-                ),
+                f"{name} does already exist in {path} and overwriting is prohibited",
                 code=StorageError.ALREADY_EXISTS,
             )
 
@@ -952,16 +937,14 @@ class LocalFileStorage(StorageInterface):
             return
         if not os.path.isfile(file_path):
             raise StorageError(
-                "{name} in {path} is not a file".format(**locals()),
+                f"{name} in {path} is not a file",
                 code=StorageError.INVALID_FILE,
             )
 
         try:
             os.remove(file_path)
         except Exception as e:
-            raise StorageError(
-                "Could not delete {name} in {path}".format(**locals()), cause=e
-            )
+            raise StorageError(f"Could not delete {name} in {path}", cause=e)
 
         self._remove_metadata_entry(path, name)
 
@@ -969,6 +952,12 @@ class LocalFileStorage(StorageInterface):
         source_data, destination_data = self._get_source_destination_data(
             source, destination, must_not_equal=True
         )
+
+        if not octoprint.filemanager.valid_file_type(destination_data["name"]):
+            raise StorageError(
+                f"{destination_data['name']} is an unrecognized file type",
+                code=StorageError.INVALID_FILE,
+            )
 
         try:
             shutil.copy2(source_data["fullpath"], destination_data["fullpath"])
@@ -998,6 +987,12 @@ class LocalFileStorage(StorageInterface):
         source_data, destination_data = self._get_source_destination_data(
             source, destination
         )
+
+        if not octoprint.filemanager.valid_file_type(destination_data["name"]):
+            raise StorageError(
+                f"{destination_data['name']} is an unrecognized file type",
+                code=StorageError.INVALID_FILE,
+            )
 
         # only a display rename? Update that and bail early
         if source_data["fullpath"] == destination_data["fullpath"]:
@@ -1116,13 +1111,14 @@ class LocalFileStorage(StorageInterface):
     def split_path(self, path):
         path = to_unicode(path)
         split = path.split("/")
+
         if len(split) == 1:
             return "", split[0]
-        else:
-            return self.join_path(*split[:-1]), split[-1]
+
+        return self.path_in_storage(self.join_path(*split[:-1])), split[-1]
 
     def join_path(self, *path):
-        return "/".join(map(to_unicode, path))
+        return self.path_in_storage("/".join(map(to_unicode, path)))
 
     def sanitize(self, path):
         """
@@ -1147,7 +1143,7 @@ class LocalFileStorage(StorageInterface):
 
     def canonicalize(self, path):
         name = None
-        if isinstance(path, basestring):
+        if isinstance(path, str):
             path = to_unicode(path)
             if path.startswith(self.basefolder):
                 path = path[len(self.basefolder) :]
@@ -1196,9 +1192,7 @@ class LocalFileStorage(StorageInterface):
                 joined_path = os.path.join(joined_path, self.sanitize_name(path_element))
         path = os.path.realpath(joined_path)
         if not path.startswith(self.basefolder):
-            raise ValueError(
-                "path not contained in base folder: {path}".format(**locals())
-            )
+            raise ValueError(f"path not contained in base folder: {path}")
         return path
 
     def _sanitize_entry(self, entry, path, entry_path):
@@ -1213,16 +1207,14 @@ class LocalFileStorage(StorageInterface):
             while os.path.exists(sanitized_path):
                 counter += 1
                 sanitized = self.sanitize_name(
-                    "{}_({}){}".format(sanitized_name, counter, sanitized_ext)
+                    f"{sanitized_name}_({counter}){sanitized_ext}"
                 )
                 sanitized_path = os.path.join(path, sanitized)
 
             try:
                 shutil.move(entry_path, sanitized_path)
 
-                self._logger.info(
-                    'Sanitized "{}" to "{}"'.format(entry_path, sanitized_path)
-                )
+                self._logger.info(f'Sanitized "{entry_path}" to "{sanitized_path}"')
                 return sanitized, sanitized_path
             except Exception:
                 self._logger.exception(
@@ -1237,12 +1229,12 @@ class LocalFileStorage(StorageInterface):
     def path_in_storage(self, path):
         if isinstance(path, (tuple, list)):
             path = self.join_path(*path)
-        if isinstance(path, basestring):
+        if isinstance(path, str):
             path = to_unicode(path)
             if path.startswith(self.basefolder):
                 path = path[len(self.basefolder) :]
             path = path.replace(os.path.sep, "/")
-        if path.startswith("/"):
+        while path.startswith("/"):
             path = path[1:]
 
         return path
@@ -1662,12 +1654,14 @@ class LocalFileStorage(StorageInterface):
                                 "type": "folder",
                                 "typePath": ["folder"],
                             }
+                            if entry_stat:
+                                entry_data["date"] = int(entry_stat.st_mtime)
 
                             result[entry_name] = entry_data
                     except Exception:
                         # So something went wrong somewhere while processing this file entry - log that and continue
                         self._logger.exception(
-                            "Error while processing entry {}".format(entry_path)
+                            f"Error while processing entry {entry_path}"
                         )
                         continue
 
@@ -1737,7 +1731,7 @@ class LocalFileStorage(StorageInterface):
 
         blocksize = 65536
         hash = hashlib.sha1()
-        with io.open(path, "rb") as f:
+        with open(path, "rb") as f:
             buffer = f.read(blocksize)
             while len(buffer) > 0:
                 hash.update(buffer)
@@ -1818,14 +1812,12 @@ class LocalFileStorage(StorageInterface):
         metadata = None
         with self._get_persisted_metadata_lock(path):
             if os.path.exists(metadata_path):
-                with io.open(metadata_path, "rt", encoding="utf-8") as f:
+                with open(metadata_path, encoding="utf-8") as f:
                     try:
                         metadata = json.load(f)
                     except Exception:
                         self._logger.exception(
-                            "Error while reading .metadata.json from {path}".format(
-                                **locals()
-                            )
+                            f"Error while reading .metadata.json from {path}"
                         )
 
         def valid_json(value):
@@ -1870,9 +1862,7 @@ class LocalFileStorage(StorageInterface):
                         to_bytes(json.dumps(metadata, indent=2, separators=(",", ": ")))
                     )
             except Exception:
-                self._logger.exception(
-                    "Error while writing .metadata.json to {path}".format(**locals())
-                )
+                self._logger.exception(f"Error while writing .metadata.json to {path}")
 
     def _delete_metadata(self, path):
         with self._get_metadata_lock(path):
@@ -1888,9 +1878,7 @@ class LocalFileStorage(StorageInterface):
                         os.remove(metadata_path)
                     except Exception:
                         self._logger.exception(
-                            "Error while deleting {metadata_file} from {path}".format(
-                                **locals()
-                            )
+                            f"Error while deleting {metadata_file} from {path}"
                         )
 
     @staticmethod
@@ -1902,8 +1890,6 @@ class LocalFileStorage(StorageInterface):
     def _migrate_metadata(self, path):
         # we switched to json in 1.3.9 - if we still have yaml here, migrate it now
         import json
-
-        import yaml
 
         with self._get_persisted_metadata_lock(path):
             metadata_path_yaml = os.path.join(path, ".metadata.yaml")
@@ -1919,22 +1905,15 @@ class LocalFileStorage(StorageInterface):
                     os.remove(metadata_path_yaml)
                 except Exception:
                     self._logger.exception(
-                        "Error while removing .metadata.yaml from {path}".format(
-                            **locals()
-                        )
+                        f"Error while removing .metadata.yaml from {path}"
                     )
                 return
 
-            with io.open(metadata_path_yaml, "rt", encoding="utf-8") as f:
-                try:
-                    metadata = yaml.safe_load(f)
-                except Exception:
-                    self._logger.exception(
-                        "Error while reading .metadata.yaml from {path}".format(
-                            **locals()
-                        )
-                    )
-                    return
+            try:
+                metadata = yaml.load_from_file(path=metadata_path_yaml)
+            except Exception:
+                self._logger.exception(f"Error while reading .metadata.yaml from {path}")
+                return
 
             if not isinstance(metadata, dict):
                 # looks invalid, ignore it
@@ -1946,9 +1925,7 @@ class LocalFileStorage(StorageInterface):
             try:
                 os.remove(metadata_path_yaml)
             except Exception:
-                self._logger.exception(
-                    "Error while removing .metadata.yaml from {path}".format(**locals())
-                )
+                self._logger.exception(f"Error while removing .metadata.yaml from {path}")
 
     @contextmanager
     def _get_metadata_lock(self, path):

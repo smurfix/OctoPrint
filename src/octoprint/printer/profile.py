@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 This module contains printer profile related code.
 
@@ -84,6 +83,9 @@ A printer profile is a ``dict`` of the following structure:
    * - ``extruder.sharedNozzle``
      - ``boolean``
      - Whether there's only one nozzle shared among all extruders (true) or one nozzle per extruder (false).
+   * - ``extruder.defaultExtrusionLength``
+     - ``int``
+     - Default extrusion length used in Control tab on initial page load in mm.
    * - ``axes``
      - ``dict``
      - Information about the printer axes
@@ -92,7 +94,7 @@ A printer profile is a ``dict`` of the following structure:
      - Information about the printer's X axis
    * - ``axes.x.speed``
      - ``float``
-     - Speed of the X axis in mm/s
+     - Speed of the X axis in mm/min
    * - ``axes.x.inverted``
      - ``bool``
      - Whether a positive value change moves the nozzle away from the print bed's origin (False, default) or towards it (True)
@@ -101,7 +103,7 @@ A printer profile is a ``dict`` of the following structure:
      - Information about the printer's Y axis
    * - ``axes.y.speed``
      - ``float``
-     - Speed of the Y axis in mm/s
+     - Speed of the Y axis in mm/min
    * - ``axes.y.inverted``
      - ``bool``
      - Whether a positive value change moves the nozzle away from the print bed's origin (False, default) or towards it (True)
@@ -110,7 +112,7 @@ A printer profile is a ``dict`` of the following structure:
      - Information about the printer's Z axis
    * - ``axes.z.speed``
      - ``float``
-     - Speed of the Z axis in mm/s
+     - Speed of the Z axis in mm/min
    * - ``axes.z.inverted``
      - ``bool``
      - Whether a positive value change moves the nozzle away from the print bed (False, default) or towards it (True)
@@ -119,7 +121,7 @@ A printer profile is a ``dict`` of the following structure:
      - Information about the printer's E axis
    * - ``axes.e.speed``
      - ``float``
-     - Speed of the E axis in mm/s
+     - Speed of the E axis in mm/min
    * - ``axes.e.inverted``
      - ``bool``
      - Whether a positive value change extrudes (False, default) or retracts (True) filament
@@ -139,7 +141,6 @@ A printer profile is a ``dict`` of the following structure:
 
 .. autoclass:: InvalidProfileError
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
@@ -147,17 +148,17 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 
 
 import copy
-import io
 import logging
 import os
 
-try:
-    from os import scandir
-except ImportError:
-    from scandir import scandir
-
 from octoprint.settings import settings
-from octoprint.util import dict_contains_keys, dict_merge, dict_sanitize, is_hidden_path
+from octoprint.util import (
+    dict_contains_keys,
+    dict_merge,
+    dict_sanitize,
+    is_hidden_path,
+    yaml,
+)
 
 
 class SaveError(Exception):
@@ -178,7 +179,7 @@ class InvalidProfileError(Exception):
     pass
 
 
-class BedFormFactor(object):
+class BedFormFactor:
     """Valid values for bed form factor"""
 
     RECTANGULAR = "rectangular"
@@ -200,7 +201,7 @@ BedTypes = BedFormFactor
 """Deprecated name of :class:`BedFormFactors`"""
 
 
-class BedOrigin(object):
+class BedOrigin:
     """Valid values for bed origin"""
 
     LOWERLEFT = "lowerleft"
@@ -218,7 +219,7 @@ class BedOrigin(object):
         ]
 
 
-class PrinterProfileManager(object):
+class PrinterProfileManager:
     """
     Manager for printer profiles. Offers methods to select the globally used printer profile and to list, add, remove,
     load and save printer profiles.
@@ -244,6 +245,7 @@ class PrinterProfileManager(object):
             "offsets": [(0, 0)],
             "nozzleDiameter": 0.4,
             "sharedNozzle": False,
+            "defaultExtrusionLength": 5,
         },
         "axes": {
             "x": {"speed": 6000, "inverted": False},
@@ -255,11 +257,13 @@ class PrinterProfileManager(object):
 
     def __init__(self):
         self._current = None
-        self._folder = settings().getBaseFolder("printerProfiles")
         self._logger = logging.getLogger(__name__)
 
+        fresh = settings().checkBaseFolder("printerProfiles")
+        self._folder = settings().getBaseFolder("printerProfiles")
+
         self._migrate_old_default_profile()
-        self._verify_default_available()
+        self._verify_default_available(fresh=fresh)
 
     def _migrate_old_default_profile(self):
         default_overrides = settings().get(["printerProfiles", "defaultProfile"])
@@ -289,23 +293,24 @@ class PrinterProfileManager(object):
             )
         )
 
-    def _verify_default_available(self):
+    def _verify_default_available(self, fresh=False):
         default_id = settings().get(["printerProfiles", "default"])
         if default_id is None:
             default_id = "_default"
 
         if not self.exists(default_id):
             if not self.exists("_default"):
-                if default_id == "_default":
-                    self._logger.error(
-                        "Profile _default does not exist, creating _default again and setting it as default"
-                    )
-                else:
-                    self._logger.error(
-                        "Selected default profile {} and _default do not exist, creating _default again and setting it as default".format(
-                            default_id
+                if not fresh:
+                    if default_id == "_default":
+                        self._logger.error(
+                            "Profile _default does not exist, creating _default again and setting it as default"
                         )
-                    )
+                    else:
+                        self._logger.error(
+                            "Selected default profile {} and _default do not exist, creating _default again and setting it as default".format(
+                                default_id
+                            )
+                        )
                 self.save(self.__class__.default, allow_overwrite=True, make_default=True)
             else:
                 self._logger.error(
@@ -430,7 +435,7 @@ class PrinterProfileManager(object):
         dates = [os.stat(self._folder).st_mtime]
         dates += [
             entry.stat().st_mtime
-            for entry in scandir(self._folder)
+            for entry in os.scandir(self._folder)
             if entry.name.endswith(".profile")
         ]
         return max(dates)
@@ -481,7 +486,7 @@ class PrinterProfileManager(object):
             try:
                 profile = self._load_from_path(path)
             except InvalidProfileError:
-                self._logger.warning("Profile {} is invalid, skipping".format(identifier))
+                self._logger.warning(f"Profile {identifier} is invalid, skipping")
                 continue
 
             if profile is None:
@@ -492,7 +497,7 @@ class PrinterProfileManager(object):
 
     def _load_all_identifiers(self):
         results = {}
-        for entry in scandir(self._folder):
+        for entry in os.scandir(self._folder):
             if is_hidden_path(entry.name) or not entry.name.endswith(".profile"):
                 continue
 
@@ -507,10 +512,7 @@ class PrinterProfileManager(object):
         if not os.path.exists(path) or not os.path.isfile(path):
             return None
 
-        import yaml
-
-        with io.open(path, "rt", encoding="utf-8") as f:
-            profile = yaml.safe_load(f)
+        profile = yaml.load_from_file(path=path)
 
         if profile is None or not isinstance(profile, dict):
             raise InvalidProfileError("Profile is None or not a dictionary")
@@ -542,15 +544,11 @@ class PrinterProfileManager(object):
                 "Profile %s already exists and not allowed to overwrite" % profile["id"]
             )
 
-        import yaml
-
         from octoprint.util import atomic_write
 
         try:
             with atomic_write(path, mode="wt", max_permissions=0o666) as f:
-                yaml.safe_dump(
-                    profile, f, default_flow_style=False, indent=2, allow_unicode=True
-                )
+                yaml.save_to_file(profile, file=f, pretty=True)
         except Exception as e:
             self._logger.exception(
                 "Error while trying to save profile %s" % profile["id"]
@@ -615,6 +613,12 @@ class PrinterProfileManager(object):
             profile["extruder"]["offsets"] = [(0.0, 0.0)]
             modified = True
 
+        if "extruder" in profile and "defaultExtrusionLength" not in profile["extruder"]:
+            profile["extruder"]["defaultExtrusionLength"] = self.default["extruder"][
+                "defaultExtrusionLength"
+            ]
+            modified = True
+
         if "heatedChamber" not in profile:
             profile["heatedChamber"] = False
             modified = True
@@ -644,12 +648,25 @@ class PrinterProfileManager(object):
 
             value[path[-1]] = converter(value[path[-1]])
 
+        def validate_value(profile, path, validator):
+            value = profile
+            for part in path[:-1]:
+                if not isinstance(value, dict) or part not in value:
+                    raise RuntimeError("%s is not contained in profile" % ".".join(path))
+                value = value[part]
+
+            if not isinstance(value, dict) or path[-1] not in value:
+                raise RuntimeError("%s is not contained in profile" % ".".join(path))
+
+            return validator(value[path[-1]])
+
         # convert ints
         for path in (
             ("extruder", "count"),
             ("axes", "x", "speed"),
             ("axes", "y", "speed"),
             ("axes", "z", "speed"),
+            ("axes", "e", "speed"),
         ):
             try:
                 convert_value(profile, path, int)
@@ -694,6 +711,21 @@ class PrinterProfileManager(object):
                     )
                 )
                 return False
+
+        # validate volume size range
+        for path in (
+            ("volume", "width"),
+            ("volume", "depth"),
+            ("volume", "height"),
+        ):
+            if not validate_value(profile, path, lambda x: x > 0 and x < 10000):
+                return False
+
+        # validate extruder count range
+        if not validate_value(
+            profile, ("extruder", "count"), lambda x: x > 0 and x < 100
+        ):
+            return False
 
         # validate form factor
         if profile["volume"]["formFactor"] not in BedFormFactor.values():

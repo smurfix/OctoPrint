@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
@@ -9,7 +6,6 @@ __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms
 import copy
 
 from flask import abort, jsonify, request, url_for
-from past.builtins import basestring
 
 from octoprint.access.permissions import Permissions
 from octoprint.printer.profile import CouldNotOverwriteError, InvalidProfileError
@@ -58,19 +54,13 @@ def printerProfilesList():
 @no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def printerProfilesAdd():
-    if "application/json" not in request.headers["Content-Type"]:
-        abort(400, description="Expected content-type JSON")
-
-    json_data = request.get_json()
-
-    if json_data is None:
-        abort(400, description="Malformed JSON body in request")
+    json_data = request.get_json()  # Werkzeug should return 400 if invalid JSON
 
     if "profile" not in json_data:
         abort(400, description="profile is missing")
 
     base_profile = printerProfileManager.get_default()
-    if "basedOn" in json_data and isinstance(json_data["basedOn"], basestring):
+    if "basedOn" in json_data and isinstance(json_data["basedOn"], str):
         other_profile = printerProfileManager.get(json_data["basedOn"])
         if other_profile is not None:
             base_profile = other_profile
@@ -140,12 +130,7 @@ def printerProfilesDelete(identifier):
 @no_firstrun_access
 @Permissions.SETTINGS.require(403)
 def printerProfilesUpdate(identifier):
-    if "application/json" not in request.headers["Content-Type"]:
-        abort(400, description="Expected content-type JSON")
-
     json_data = request.get_json()
-    if json_data is None:
-        abort(400, description="Malformed JSON body in request")
 
     if "profile" not in json_data:
         abort(400, description="profile missing")

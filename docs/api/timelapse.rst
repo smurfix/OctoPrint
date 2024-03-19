@@ -27,11 +27,16 @@ Retrieve a list of timelapses and the current config
 Delete a timelapse
 ==================
 
-.. http:delete:: /api/timelapse/(string:filename)
+.. http:delete:: /api/timelapse/(string:name)
 
-   Delete the timelapse ``filename``.
+   Delete the timelapse ``name``.
+
+   Returns a :ref:`timelapse list <sec-api-timelapse-datamodel-list>` in the
+   response body with the updated information.
 
    Requires the ``TIMELAPSE_DELETE`` permission.
+
+   :param unrendered: If provided and true, also include unrendered timelapses in the response
 
 .. _sec-api-timelapse-render:
 
@@ -43,7 +48,7 @@ Issue a command for an unrendered timelapse
    Current only supports to render the unrendered timelapse ``name`` via the
    ``render`` command.
 
-   Requires the ``TIMELAPSE_ADMIN`` permission.
+   Requires the ``TIMELAPSE_MANAGE_UNRENDERED`` permission.
 
    :json command: The command to issue, currently only ``render`` is supported
 
@@ -56,7 +61,12 @@ Delete an unrendered timelapse
 
    Delete the unrendered timelapse ``name``.
 
-   Requires the ``TIMELAPSE_DELETE`` permission.
+   Returns a :ref:`timelapse list <sec-api-timelapse-datamodel-list>` in the
+   response body.
+
+   Requires the ``TIMELAPSE_MANAGE_UNRENDERED`` permission.
+
+   :param unrendered: If provided and true, also include unrendered timelapses in the response
 
 .. _sec-api-timelapse-saveconfig:
 
@@ -65,11 +75,18 @@ Change current timelapse config
 
 .. http:post:: /api/timelapse
 
-   Save a new :ref:`timelapse configuration <sec-api-timelapse-datamodel-config>` to use for the next print.
+   Save a new :ref:`timelapse configuration <sec-api-timelapse-datamodel-config>` to use for the next print. Set the optional ``save`` flag in the
+   configuration to ``true`` in order to make the new configuration persist across restarts.
 
    The configuration is expected as the request body.
 
+   Returns a :ref:`timelapse list <sec-api-timelapse-datamodel-list>` in the
+   response body.
+
    Requires the ``TIMELAPSE_ADMIN`` permission.
+
+   :param unrendered: If provided and true, also include unrendered timelapses in the response
+
 
 .. _sec-api-timelapse-datamodel:
 
@@ -135,6 +152,10 @@ Rendered timelapse
      - 1
      - string
      - URL for downloading the timelapse
+   * - ``thumbnail``
+     - 1
+     - string
+     - URL for downloading a thumbnail of the timelapse (optional)
 
 .. _sec-api-timelapse-datamodel-unrendered:
 
@@ -196,6 +217,10 @@ Timelapse configuration
      - 1
      - string
      - Type of the timelapse, either ``off``, ``zchange`` or ``timed``.
+   * - ``save``
+     - 1
+     - bool
+     - Optional flag to be included when saving a configuration to make the configuration persist across restarts
 
 Further fields are timelapse type specific, see below for details.
 
@@ -258,4 +283,3 @@ For timelapse type ``timed``.
      - 1
      - int
      - Seconds between individual shots
-

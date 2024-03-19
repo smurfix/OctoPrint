@@ -22,6 +22,7 @@ $(function () {
         self.isLoading = ko.observable(undefined);
 
         self.extrusionAmount = ko.observable(undefined);
+
         self.controls = ko.observableArray([]);
 
         self.distances = ko.observableArray([0.1, 1, 10, 100]);
@@ -36,12 +37,7 @@ $(function () {
 
         self.controlsFromServer = [];
         self.additionalControls = [];
-
-        self.webcamDisableTimeout = undefined;
-        self.webcamLoaded = ko.observable(false);
-        self.webcamMjpgEnabled = ko.observable(false);
-        self.webcamHlsEnabled = ko.observable(false);
-        self.webcamError = ko.observable(false);
+        self.intersectionObservers = [];
 
         self.keycontrolActive = ko.observable(false);
         self.keycontrolHelpActive = ko.observable(false);
@@ -55,23 +51,142 @@ $(function () {
             );
         });
         self.showKeycontrols = ko.pureComputed(function () {
-            return self.keycontrolActive() && self.keycontrolPossible();
+            return self.keycontrolPossible();
         });
 
-        self.webcamRatioClass = ko.pureComputed(function () {
-            if (self.settings.webcam_streamRatio() == "4:3") {
-                return "ratio43";
+        self._visibleWebcam = undefined;
+
+        self._dispatchWebcamRefresh = function (target) {
+            log.debug(`Webcam refresh triggered for #${target.id}`);
+            var vm = ko.dataFor(target.children[0]);
+            if (vm === self) {
+                log.debug(`VM for webcam #${target.id} is not bound, skipping refresh`);
+            } else if (vm === undefined) {
+                log.debug(`VM for webcam #${target.id} not found, skipping refresh`);
+            } else if (typeof vm.onWebcamRefresh === "function") {
+                vm.onWebcamRefresh();
             } else {
-                return "ratio169";
+                log.debug(
+                    `VM for webcam #${target.id} does not declare 'onWebcamRefresh()', skipping refresh (vm=${vm.constructor.name})`
+                );
             }
-        });
+        };
+
+        self._dispatchWebcamVisibilityChange = function (target, visible) {
+            log.debug(`Webcam visibility of #${target.id} changed to ${visible}`);
+            var vm = ko.dataFor(target.children[0]);
+            if (vm === self) {
+                log.debug(
+                    `VM for webcam #${target.id} is not bound, skipping visibility update`
+                );
+            } else if (vm === undefined) {
+                log.debug(
+                    `VM for webcam #${target.id} not found, skipping visibility update`
+                );
+            } else if (typeof vm.onWebcamVisibilityChange === "function") {
+                vm.onWebcamVisibilityChange(visible);
+            } else {
+                log.debug(
+                    `VM for webcam #${target.id} does not declare 'onWebcamVisibilityChange(visible)', skipping visibility update (vm=${vm.constructor.name})`
+                );
+            }
+        };
+
+        const selectedCameraStorageKey = "core.control.selectedCamera";
+        self.selectDefaultWebcam = function () {
+            if (!document.querySelector("#webcam_plugins_container .nav")) {
+                // we only have one webcam plugin, select that and be done (note: this bypasses local storage)
+                $("#webcam-group .tab-pane:first").addClass("active");
+                return;
+            }
+
+            let div = localStorage[selectedCameraStorageKey];
+
+            if (!div || document.getElementById(div.slice(1)) === null) {
+                div = undefined;
+            }
+
+            if (div !== undefined) {
+                $(`${div}_link a`).tab("show");
+            } else {
+                $("#webcam_plugins_container .nav li:first a").tab("show");
+            }
+        };
+
+        self.onStartupComplete = function () {
+            $("#webcam_plugins_container .nav a[data-toggle='tab']").on("shown", (e) => {
+                localStorage[selectedCameraStorageKey] = e.target.hash;
+            });
+            self.selectDefaultWebcam();
+            self.recreateIntersectionObservers();
+        };
+
+        self.recreateIntersectionObservers = function () {
+            // We are using the IntersectionObserver API to determine whether a webcam is visible or not.
+            // A webcam will not intersect with the control tab if the control tab is invisible because another tab
+            // is selected or if the webcam isn't shown because another webcam is active.
+            //
+            // Whenever the webacam changes visibility we will call onWebcamVisibilityChange() which the webcam's
+            //  VM can use to start or stop the stream.
+            self.intersectionObservers.forEach(function (observer) {
+                observer.disconnect();
+            });
+            self.intersectionObservers = [];
+
+            document
+                .querySelectorAll("#webcam-group .tab-pane")
+                .forEach(function (target) {
+                    var options = {
+                        root: document.querySelector("#webcam_plugins_container"),
+                        rootMargin: "0px",
+                        threshold: 0.01
+                    };
+                    var callback = function (entries) {
+                        var visible = entries[0].isIntersecting;
+                        self._dispatchWebcamVisibilityChange(target, visible);
+
+                        // Keep track which webcam is currently visible (if any)
+                        if (visible) {
+                            self._visibleWebcam = target;
+                        } else if (self._visibleWebcam === target && !visible) {
+                            self._visibleWebcam = undefined;
+                        }
+                    };
+
+                    var observer = new IntersectionObserver(callback, options);
+                    observer.observe(target);
+                    self.intersectionObservers.push(observer);
+                });
+        };
+
+        self.onBrowserTabVisibilityChange = function (tabVisible) {
+            // We also observe the browser tab. If any webcam is currently visible, we will update
+            // it with the tab status as well.
+            if (self._visibleWebcam !== undefined) {
+                self._dispatchWebcamVisibilityChange(self._visibleWebcam, tabVisible);
+            }
+        };
+
+        self.refreshWebcam = function () {
+            if (self._visibleWebcam !== undefined) {
+                self._dispatchWebcamRefresh(self._visibleWebcam);
+            }
+        };
 
         self.settings.printerProfiles.currentProfileData.subscribe(function () {
             self._updateExtruderCount();
+            self._updateExtrusionAmount();
             self.settings.printerProfiles
                 .currentProfileData()
                 .extruder.count.subscribe(self._updateExtruderCount);
         });
+        self._updateExtrusionAmount = function () {
+            self.extrusionAmount(
+                self.settings.printerProfiles
+                    .currentProfileData()
+                    .extruder.defaultExtrusionLength()
+            );
+        };
         self._updateExtruderCount = function () {
             var tools = [];
 
@@ -113,9 +228,7 @@ $(function () {
             self.isLoading(data.flags.loading);
         };
 
-        self.onEventSettingsUpdated = function (payload) {
-            // the webcam url might have changed, make sure we replace it now if the tab is focused
-            self._enableWebcam();
+        self.onEventSettingsUpdated = function () {
             self.requestData();
         };
 
@@ -228,7 +341,7 @@ $(function () {
                             element.slider.min
                         );
 
-                        // if default value is not within range of min and max, correct that
+                        // if default value is not w/i range of min and max, correct that
                         if (
                             !_.inRange(
                                 defaultValue,
@@ -258,7 +371,8 @@ $(function () {
             if (control.hasOwnProperty("javascript")) {
                 var js = control.javascript;
 
-                // if js is a function everything's fine already, but if it's a string we need to eval that first
+                // if js is a function everything's fine already, but if it's a string
+                // we need to eval that first
                 if (!_.isFunction(js)) {
                     control.javascript = function (data) {
                         eval(js);
@@ -269,7 +383,8 @@ $(function () {
             if (control.hasOwnProperty("enabled")) {
                 var enabled = control.enabled;
 
-                // if js is a function everything's fine already, but if it's a string we need to eval that first
+                // if js is a function everything's fine already, but if it's a string
+                // we need to eval that first
                 if (!_.isFunction(enabled)) {
                     control.enabled = function (data) {
                         return eval(enabled);
@@ -480,84 +595,12 @@ $(function () {
             return span + " " + offset;
         };
 
-        self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
-            self.requestData();
-        };
-
-        self._disableWebcam = function () {
-            // only disable webcam stream if tab is out of focus for more than 5s, otherwise we might cause
-            // more load by the constant connection creation than by the actual webcam stream
-
-            // safari bug doesn't release the mjpeg stream, so we just disable this for safari.
-            if (OctoPrint.coreui.browser.safari) {
-                return;
-            }
-
-            var timeout = self.settings.webcam_streamTimeout() || 5;
-            self.webcamDisableTimeout = setTimeout(function () {
-                log.debug("Unloading webcam stream");
-                $("#webcam_image").attr("src", "");
-                self.webcamLoaded(false);
-            }, timeout * 1000);
-        };
-
-        self._enableWebcam = function () {
-            if (
-                OctoPrint.coreui.selectedTab != "#control" ||
-                !OctoPrint.coreui.browserTabVisible
-            ) {
-                return;
-            }
-
-            if (self.webcamDisableTimeout != undefined) {
-                clearTimeout(self.webcamDisableTimeout);
-            }
-
-            // IF disabled then we dont need to do anything
-            if (self.settings.webcam_webcamEnabled() == false) {
-                return;
-            }
-
-            // Determine stream type and switch to corresponding webcam.
-            var streamType = determineWebcamStreamType(self.settings.webcam_streamUrl());
-            if (streamType == "mjpg") {
-                self._switchToMjpgWebcam();
-            } else if (streamType == "hls") {
-                self._switchToHlsWebcam();
-            } else {
-                throw "Unknown stream type " + streamType;
-            }
-        };
-
-        self.onWebcamLoaded = function () {
-            if (self.webcamLoaded()) return;
-
-            log.debug("Webcam stream loaded");
-            self.webcamLoaded(true);
-            self.webcamError(false);
-        };
-
-        self.onWebcamErrored = function () {
-            log.debug("Webcam stream failed to load/disabled");
-            self.webcamLoaded(false);
-            self.webcamError(true);
-        };
-
-        self.onTabChange = function (current, previous) {
-            if (current == "#control") {
-                self._enableWebcam();
-            } else if (previous == "#control") {
-                self._disableWebcam();
-            }
-        };
-
-        self.onBrowserTabVisibilityChange = function (status) {
-            if (status) {
-                self._enableWebcam();
-            } else {
-                self._disableWebcam();
-            }
-        };
+        self.onUserPermissionsChanged =
+            self.onUserLoggedIn =
+            self.onUserLoggedOut =
+                function () {
+                    self.requestData();
+                };
 
         self.onAllBound = function (allViewModels) {
             var additionalControls = [];
@@ -568,9 +611,12 @@ $(function () {
                 self.additionalControls = additionalControls;
                 self.rerenderControls();
             }
-            self._enableWebcam();
 
-            self.extrusionAmount(self.settings.printer_defaultExtrusionLength());
+            self.extrusionAmount(
+                self.settings.printerProfiles
+                    .currentProfileData()
+                    .extruder.defaultExtrusionLength()
+            );
         };
 
         self.onFocus = function (data, event) {
@@ -580,13 +626,13 @@ $(function () {
 
         self.onMouseOver = function (data, event) {
             if (!self.settings.feature_keyboardControl()) return;
-            $("#webcam_container").focus();
+            $("#webcam_plugins_container").focus();
             self.keycontrolActive(true);
         };
 
         self.onMouseOut = function (data, event) {
             if (!self.settings.feature_keyboardControl()) return;
-            $("#webcam_container").blur();
+            $("#webcam_plugins_container").blur();
             self.keycontrolActive(false);
         };
 
@@ -659,9 +705,12 @@ $(function () {
                     // z home
                     button = $("#control-zhome");
                     break;
-                default:
+                case 9: // prevent tab key from removing focus from webcam
                     event.preventDefault();
                     return false;
+                default:
+                    // don't prevent other keys
+                    return true;
             }
 
             if (button === undefined) {
@@ -680,55 +729,6 @@ $(function () {
 
         self.stripDistanceDecimal = function (distance) {
             return distance.toString().replace(".", "");
-        };
-
-        self._switchToMjpgWebcam = function () {
-            var webcamImage = $("#webcam_image");
-            var currentSrc = webcamImage.attr("src");
-
-            // safari bug doesn't release the mjpeg stream, so we just set it up the once
-            if (OctoPrint.coreui.browser.safari && currentSrc != undefined) {
-                return;
-            }
-
-            var newSrc = self.settings.webcam_streamUrl();
-            if (currentSrc != newSrc) {
-                if (self.settings.webcam_cacheBuster()) {
-                    if (newSrc.lastIndexOf("?") > -1) {
-                        newSrc += "&";
-                    } else {
-                        newSrc += "?";
-                    }
-                    newSrc += new Date().getTime();
-                }
-
-                self.webcamLoaded(false);
-                self.webcamError(false);
-                webcamImage.attr("src", newSrc);
-
-                self.webcamHlsEnabled(false);
-                self.webcamMjpgEnabled(true);
-            }
-        };
-
-        self._switchToHlsWebcam = function () {
-            var video = document.getElementById("webcam_hls");
-
-            // Check for native playback options: https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canPlayType
-            if (
-                video != null &&
-                typeof video.canPlayType != undefined &&
-                video.canPlayType("application/vnd.apple.mpegurl") == "probably"
-            ) {
-                video.src = self.settings.webcam_streamUrl();
-            } else if (Hls.isSupported()) {
-                var hls = new Hls();
-                hls.loadSource(self.settings.webcam_streamUrl());
-                hls.attachMedia(video);
-            }
-
-            self.webcamMjpgEnabled(false);
-            self.webcamHlsEnabled(true);
         };
     }
 

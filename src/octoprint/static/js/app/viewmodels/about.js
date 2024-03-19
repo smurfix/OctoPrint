@@ -11,6 +11,8 @@ $(function () {
 
         self.systeminfo = ko.observableArray();
 
+        self.devmode = getQueryParameterByName("devmode") !== null;
+
         self.getSystemInfo = function () {
             if (!self.loginState.hasPermission(self.access.permissions.SYSTEM)) return;
             return OctoPrint.system.getInfo().done(self.fromSystemInfo);
@@ -39,11 +41,14 @@ $(function () {
                 $("a:first", self.aboutTabs).tab("show");
             }
             self.aboutContent.scrollTop(0);
+
+            const maxHeight = $.fn.modal.defaults.maxHeight() - 80 - 60;
             self.aboutDialog
                 .modal({
                     minHeight: function () {
-                        return Math.max($.fn.modal.defaults.maxHeight() - 80, 250);
-                    }
+                        return Math.max(maxHeight, 250);
+                    },
+                    maxHeight: maxHeight
                 })
                 .css({
                     "margin-left": function () {
@@ -68,6 +73,15 @@ $(function () {
             });
         };
 
+        self.onAllBound = function (allViewModels) {
+            self.aboutDialog.on("show", function () {
+                callViewModels(allViewModels, "onAboutShown");
+            });
+            self.aboutDialog.on("hidden", function () {
+                callViewModels(allViewModels, "onAboutHidden");
+            });
+        };
+
         self.showTab = function (tab) {
             $('a[href="#' + tab + '"]', self.aboutTabs).tab("show");
         };
@@ -75,7 +89,12 @@ $(function () {
 
     OCTOPRINT_VIEWMODELS.push({
         construct: AboutViewModel,
-        elements: ["#about_dialog", "#footer_about", "#footer_systeminfo"],
+        elements: [
+            "#about_dialog",
+            "#footer_about",
+            "#footer_achievements",
+            "#footer_systeminfo"
+        ],
         dependencies: ["loginStateViewModel", "accessViewModel"]
     });
 });

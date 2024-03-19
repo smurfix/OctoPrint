@@ -2,7 +2,6 @@
 
 ## Web Interface
 
-  * [AVLTree](https://gist.github.com/viking/2424106) (modified): GPL, LGPL (dual licensed)
   * [Babel JavaScript Support](https://github.com/mitsuhiko/babel/blob/master/contrib/babel.js): BSD
   * [@babel/polyfill](https://babeljs.io/docs/en/babel-polyfill/): MIT
   * [Bootstrap](http://getbootstrap.com/): Apache License 2.0
@@ -13,6 +12,10 @@
   * [css-element-queries](https://github.com/marcj/css-element-queries): MIT
   * [Detect Mobile Browser](http://detectmobilebrowsers.com/): Public Domain
   * [Flot](http://www.flotcharts.org/): MIT
+  * [Flot Crosshair Plugin](http://www.flotcharts.org/): MIT
+  * [Flot Dashes Plugin](https://github.com/cquartier/flot.dashes): Unlicense
+  * [Flot Resize Plugin](http://www.flotcharts.org/): MIT
+  * [Flot Time Plugin](http://www.flotcharts.org/): MIT
   * [HLS.js](https://github.com/video-dev/hls.js): Apache License 2.0
   * [JavaScript MD5](https://github.com/blueimp/JavaScript-MD5): MIT
   * [JQuery](http://jquery.com/): MIT
@@ -29,6 +32,7 @@
   * [md5.js](https://blueimp.github.io/JavaScript-MD5/): MIT
   * [Modernizr](http://modernizr.com): MIT
   * [Moment.js](http://momentjs.com/): MIT
+  * [Pako](https://github.com/nodeca/pako): MIT
   * [PNotify](http://sciactive.com/pnotify/): GPL, LGPL, MPL (triple licensed)
   * [pusher.color.js](http://cache.preserve.io/5g18q0pw/index.html) (original link dead): MIT
   * [SockJS](https://github.com/sockjs/sockjs-client): MIT
@@ -44,7 +48,7 @@
   * [emoji](https://github.com/carpedm20/emoji/): BSD
   * [feedparser](https://github.com/kurtmckee/feedparser): BSD
   * [filetype](https://h2non.github.io/filetype.py/): MIT
-  * [Flask](http://flask.pocoo.org/): BSD
+  * [Flask](https://flask.palletsprojects.com/): BSD
   * [Flask-Assets](http://github.com/miracle2k/flask-assets): BSD
   * [Flask-Babel](http://github.com/mitsuhiko/flask-babel): BSD
   * [Flask-Login](https://github.com/maxcountryman/flask-login): MIT
@@ -55,7 +59,7 @@
   * [futures](https://github.com/agronholm/pythonfutures): Python
   * [monotonic](https://github.com/atdt/monotonic): Apache License 2.0
   * [netaddr](https://github.com/drkjam/netaddr/): BSD
-  * [netifaces](https://bitbucket.org/al45tair/netifaces): MIT
+  * [netifaces2](https://github.com/SamuelYvon/netifaces-2): MIT
   * [pathvalidate](https://pathvalidate.readthedocs.io/en/latest/index.html): MIT
   * [pkginfo](http://pypi.python.org/pypi/pkginfo/): Python
   * [psutil](https://github.com/giampaolo/psutil): BSD
@@ -74,6 +78,7 @@
   * [watchdog](http://github.com/gorakhargosh/watchdog): Apache License 2.0
   * [websocket-client](https://github.com/liris/websocket-client): LGPLv3
   * [wrapt](http://wrapt.readthedocs.org/): BSD
+  * [zipstream-ng](https://github.com/pR0Ps/zipstream-ng): LGPLv3
 
 ## Development (testing, documentation generation, etc)
 

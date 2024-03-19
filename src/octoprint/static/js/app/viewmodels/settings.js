@@ -41,15 +41,7 @@ $(function () {
         self.translationUploadFilename = ko.observable();
         self.invalidTranslationArchive = ko.pureComputed(function () {
             var name = self.translationUploadFilename();
-            return (
-                name !== undefined &&
-                !(
-                    _.endsWith(name.toLocaleLowerCase(), ".zip") ||
-                    _.endsWith(name.toLocaleLowerCase(), ".tar.gz") ||
-                    _.endsWith(name.toLocaleLowerCase(), ".tgz") ||
-                    _.endsWith(name.toLocaleLowerCase(), ".tar")
-                )
-            );
+            return name !== undefined && !_.endsWith(name.toLocaleLowerCase(), ".zip");
         });
         self.enableTranslationUpload = ko.pureComputed(function () {
             var name = self.translationUploadFilename();
@@ -116,7 +108,6 @@ $(function () {
             }
         };
 
-        self.webcam_available_ratios = ["16:9", "4:3"];
         self.webcam_available_videocodecs = ["libx264", "mpeg2video"];
 
         var auto_locale = {
@@ -136,6 +127,8 @@ $(function () {
         self.api_key = ko.observable(undefined);
         self.api_allowCrossOrigin = ko.observable(undefined);
 
+        self.apiKeyVisible = ko.observable(false);
+
         self.appearance_name = ko.observable(undefined);
         self.appearance_color = ko.observable(undefined);
         self.appearance_colorTransparent = ko.observable();
@@ -150,10 +143,6 @@ $(function () {
 
         self.webcam_webcamEnabled = ko.observable(undefined);
         self.webcam_timelapseEnabled = ko.observable(undefined);
-        self.webcam_streamUrl = ko.observable(undefined);
-        self.webcam_streamRatio = ko.observable(undefined);
-        self.webcam_streamTimeout = ko.observable(undefined);
-        self.webcam_snapshotUrl = ko.observable(undefined);
         self.webcam_snapshotTimeout = ko.observable(undefined);
         self.webcam_snapshotSslValidation = ko.observable(undefined);
         self.webcam_ffmpegPath = ko.observable(undefined);
@@ -162,21 +151,22 @@ $(function () {
         self.webcam_ffmpegThreads = ko.observable(undefined);
         self.webcam_ffmpegVideoCodec = ko.observable(undefined);
         self.webcam_watermark = ko.observable(undefined);
-        self.webcam_flipH = ko.observable(undefined);
-        self.webcam_flipV = ko.observable(undefined);
-        self.webcam_rotate90 = ko.observable(undefined);
-        self.webcam_cacheBuster = ko.observable(undefined);
+        self.webcam_defaultWebcam = ko.observable(undefined);
+        self.webcam_snapshotWebcam = ko.observable(undefined);
+        self.webcam_webcams = ko.observableArray([]);
 
         self.feature_temperatureGraph = ko.observable(undefined);
         self.feature_sdSupport = ko.observable(undefined);
         self.feature_keyboardControl = ko.observable(undefined);
         self.feature_pollWatched = ko.observable(undefined);
         self.feature_modelSizeDetection = ko.observable(undefined);
+        self.feature_rememberFileFolder = ko.observable(undefined);
         self.feature_printStartConfirmation = ko.observable(undefined);
         self.feature_printCancelConfirmation = ko.observable(undefined);
         self.feature_uploadOverwriteConfirmation = ko.observable(undefined);
         self.feature_g90InfluencesExtruder = ko.observable(undefined);
         self.feature_autoUppercaseBlacklist = ko.observable(undefined);
+        self.feature_enableDragDropUpload = ko.observable(undefined);
 
         self.gcodeAnalysis_runAt = ko.observable(undefined);
 
@@ -210,12 +200,16 @@ $(function () {
         self.serial_blockedCommands = ko.observable(undefined);
         self.serial_ignoredCommands = ko.observable(undefined);
         self.serial_pausingCommands = ko.observable(undefined);
+        self.serial_sdCancelCommand = ko.observable(undefined);
         self.serial_emergencyCommands = ko.observable(undefined);
         self.serial_helloCommand = ko.observable(undefined);
         self.serial_serialErrorBehaviour = ko.observable("cancel");
         self.serial_triggerOkForM29 = ko.observable(undefined);
         self.serial_waitForStart = ko.observable(undefined);
+        self.serial_waitToLoadSdFileList = ko.observable(undefined);
         self.serial_sendChecksum = ko.observable("print");
+        self.serial_sendChecksumWithUnknownCommands = ko.observable(undefined);
+        self.serial_unknownCommandsNeedAck = ko.observable(undefined);
         self.serial_sdRelativePath = ko.observable(undefined);
         self.serial_sdLowerCase = ko.observable(undefined);
         self.serial_sdAlwaysAvailable = ko.observable(undefined);
@@ -240,16 +234,17 @@ $(function () {
         self.serial_capBusyProtocol = ko.observable(undefined);
         self.serial_capEmergencyParser = ko.observable(undefined);
         self.serial_capExtendedM20 = ko.observable(undefined);
+        self.serial_capLfnWrite = ko.observable(undefined);
         self.serial_sendM112OnError = ko.observable(undefined);
         self.serial_disableSdPrintingDetection = ko.observable(undefined);
         self.serial_ackMax = ko.observable(undefined);
         self.serial_resendRatioThreshold = ko.observable(100);
         self.serial_resendRatioStart = ko.observable(100);
+        self.serial_ignoreEmptyPorts = ko.observable(undefined);
+        self.serial_enableShutdownActionCommand = ko.observable(undefined);
 
         self.folder_uploads = ko.observable(undefined);
         self.folder_timelapse = ko.observable(undefined);
-        self.folder_timelapseTmp = ko.observable(undefined);
-        self.folder_logs = ko.observable(undefined);
         self.folder_watched = ko.observable(undefined);
 
         self.scripts_gcode_beforePrintStarted = ko.observable(undefined);
@@ -323,7 +318,7 @@ $(function () {
             self.server_onlineCheckResolutionBroken(false);
         };
 
-        var folderTypes = ["uploads", "timelapse", "timelapseTmp", "logs", "watched"];
+        var folderTypes = ["uploads", "timelapse", "watched"];
 
         var checkForDuplicateFolders = function () {
             _.each(folderTypes, function (folderType) {
@@ -381,6 +376,7 @@ $(function () {
 
         self.observableCopies = {
             feature_waitForStart: "serial_waitForStart",
+            feature_waitToLoadSdFileList: "serial_waitToLoadSdFileList",
             feature_sendChecksum: "serial_sendChecksum",
             feature_sdRelativePath: "serial_sdRelativePath",
             feature_sdAlwaysAvailable: "serial_sdAlwaysAvailable",
@@ -399,6 +395,18 @@ $(function () {
             }
         });
 
+        self.webcamCompat = {
+            webcam_streamUrl: "streamUrl",
+            webcam_streamRatio: "streamRatio",
+            webcam_streamTimeout: "streamTimeout",
+            webcam_streamWebrtcIceServers: "webrtcIceServers",
+            webcam_snapshotUrl: "snapshotUrl",
+            webcam_flipH: "flipH",
+            webcam_flipV: "flipV",
+            webcam_rotate90: "rotate90",
+            webcam_cacheBuster: "cacheBuster"
+        };
+
         self.addTemperatureProfile = function () {
             self.temperature_profiles.push({
                 name: "New",
@@ -415,153 +423,12 @@ $(function () {
         self.addTerminalFilter = function () {
             self.terminalFilters.push({
                 name: "New",
-                regex:
-                    "(Send:\\s+(N\\d+\\s+)?M105)|(Recv:\\s+(ok\\s+([PBN]\\d+\\s+)*)?.*([BCLPR]|T\\d*):-?\\d+)"
+                regex: "(Send:\\s+(N\\d+\\s+)?M105)|(Recv:\\s+(ok\\s+([PBN]\\d+\\s+)*)?.*([BCLPR]|T\\d*):-?\\d+)"
             });
         };
 
         self.removeTerminalFilter = function (filter) {
             self.terminalFilters.remove(filter);
-        };
-
-        self.testWebcamStreamUrlBusy = ko.observable(false);
-        self.testWebcamStreamUrl = function () {
-            if (!self.webcam_streamUrl()) {
-                return;
-            }
-
-            if (self.testWebcamStreamUrlBusy()) {
-                return;
-            }
-
-            var text = gettext(
-                "If you see your webcam stream below, the entered stream URL is ok."
-            );
-            var streamType = determineWebcamStreamType(self.webcam_streamUrl());
-            var webcam_element;
-            if (streamType == "mjpg") {
-                webcam_element = $('<img src="' + self.webcam_streamUrl() + '">');
-            } else if (streamType == "hls") {
-                webcam_element = $(
-                    '<video id="webcam_hls" muted autoplay style="width: 100%"/>'
-                );
-                video_element = webcam_element[0];
-                if (video_element.canPlayType("application/vnd.apple.mpegurl")) {
-                    video_element.src = self.webcam_streamUrl();
-                } else if (Hls.isSupported()) {
-                    var hls = new Hls();
-                    hls.loadSource(self.webcam_streamUrl());
-                    hls.attachMedia(video_element);
-                }
-            } else {
-                throw "Unknown stream type " + streamType;
-            }
-
-            var message = $("<div id='webcamTestContainer'></div>")
-                .append($("<p></p>"))
-                .append(text)
-                .append(webcam_element);
-
-            self.testWebcamStreamUrlBusy(true);
-            showMessageDialog({
-                title: gettext("Stream test"),
-                message: message,
-                onclose: function () {
-                    self.testWebcamStreamUrlBusy(false);
-                }
-            });
-        };
-
-        self.testWebcamSnapshotUrlBusy = ko.observable(false);
-        self.testWebcamSnapshotUrl = function (viewModel, event) {
-            if (!self.webcam_snapshotUrl()) {
-                return;
-            }
-
-            if (self.testWebcamSnapshotUrlBusy()) {
-                return;
-            }
-
-            var errorText = gettext(
-                "Could not retrieve snapshot URL, please double check the URL"
-            );
-            var errorTitle = gettext("Snapshot test failed");
-
-            self.testWebcamSnapshotUrlBusy(true);
-            OctoPrint.util
-                .testUrl(self.webcam_snapshotUrl(), {
-                    method: "GET",
-                    response: "bytes",
-                    timeout: self.webcam_snapshotTimeout(),
-                    validSsl: self.webcam_snapshotSslValidation(),
-                    content_type_whitelist: ["image/*"],
-                    content_type_guess: true
-                })
-                .done(function (response) {
-                    if (!response.result) {
-                        if (
-                            response.status &&
-                            response.response &&
-                            response.response.content_type
-                        ) {
-                            // we could contact the server, but something else was wrong, probably the mime type
-                            errorText = gettext(
-                                "Could retrieve the snapshot URL, but it didn't look like an " +
-                                    "image. Got this as a content type header: <code>%(content_type)s</code>. Please " +
-                                    "double check that the URL is returning static images, not multipart data " +
-                                    "or videos."
-                            );
-                            errorText = _.sprintf(errorText, {
-                                content_type: _.escape(response.response.content_type)
-                            });
-                        }
-
-                        showMessageDialog({
-                            title: errorTitle,
-                            message: errorText,
-                            onclose: function () {
-                                self.testWebcamSnapshotUrlBusy(false);
-                            }
-                        });
-                        return;
-                    }
-
-                    var content = response.response.content;
-                    var contentType = response.response.assumed_content_type;
-
-                    var mimeType = "image/jpeg";
-                    if (contentType) {
-                        mimeType = contentType.split(";")[0];
-                    }
-
-                    var text = gettext(
-                        "If you see your webcam snapshot picture below, the entered snapshot URL is ok."
-                    );
-                    showMessageDialog({
-                        title: gettext("Snapshot test"),
-                        message: $(
-                            "<p>" +
-                                text +
-                                '</p><p><img src="data:' +
-                                mimeType +
-                                ";base64," +
-                                content +
-                                '" style="border: 1px solid black" /></p>'
-                        ),
-                        onclose: function () {
-                            self.testWebcamSnapshotUrlBusy(false);
-                        }
-                    });
-                })
-                .fail(function () {
-                    showMessageDialog({
-                        title: errorTitle,
-                        message: errorText,
-                        onclose: function () {
-                            self.testWebcamSnapshotUrlBusy(false);
-                        }
-                    });
-                });
         };
 
         self.testWebcamFfmpegPathBusy = ko.observable(false);
@@ -728,7 +595,6 @@ $(function () {
                 dataType: "json",
                 maxNumberOfFiles: 1,
                 autoUpload: false,
-                headers: OctoPrint.getRequestHeaders(),
                 add: function (e, data) {
                     if (data.files.length == 0) {
                         return false;
@@ -839,8 +705,34 @@ $(function () {
             );
         };
 
+        self.deleteApiKey = () => {
+            if (!CONFIG_ACCESS_CONTROL) return;
+            if (!self.api_key()) return;
+
+            showConfirmationDialog(
+                gettext(
+                    "This will delete the API Key. It will cease to to function immediately."
+                ),
+                function () {
+                    OctoPrint.settings.deleteApiKey().done(() => {
+                        self.api_key(undefined);
+                    });
+                }
+            );
+        };
+
         self.copyApiKey = function () {
             copyToClipboard(self.api_key());
+        };
+
+        self.revealingApiKey = ko.observable(false);
+        self.revealApiKey = () => {
+            self.loginState.reauthenticateIfNecessary(() => {
+                self.revealingApiKey(true);
+                self.requestData().always(() => {
+                    self.revealingApiKey(false);
+                });
+            });
         };
 
         self.showTranslationManager = function () {
@@ -1166,6 +1058,11 @@ $(function () {
                         return;
                     }
 
+                    if (self.webcamCompat.hasOwnProperty(observable)) {
+                        // webcam compat layer, skip
+                        return;
+                    }
+
                     if (mapping && mapping[key] && _.isFunction(mapping[key])) {
                         result[key] = mapping[key]();
                         flag = true;
@@ -1198,6 +1095,7 @@ $(function () {
             return data;
         };
 
+        self.reauthenticationTimeout = undefined;
         self.fromResponse = function (response, local) {
             // server side changes to set
             var serverChangedData;
@@ -1310,6 +1208,31 @@ $(function () {
                 }
             };
 
+            // set up webcam compat layer if not yet done
+            _.each(self.webcamCompat, (mapped, key) => {
+                if (self.settings.hasOwnProperty(key)) return;
+                if (!self.settings.webcam.hasOwnProperty(mapped)) return;
+                const message =
+                    "Please use the webcam system introduced with 1.9.0, the " +
+                    key +
+                    " config setting is deprecated and will be removed in a future release. Stacktrace:";
+                self[key] = ko.pureComputed({
+                    read: () => {
+                        const exc = new Error();
+                        log.warn(message, exc.stack || exc.stacktrace || "<n/a>");
+
+                        return self.settings.webcam[mapped]();
+                    },
+                    write: (value) => {
+                        const exc = new Error();
+                        log.warn(message, exc.stack || exc.stacktrace || "<n/a>");
+
+                        self.settings.webcam[mapped](value);
+                    },
+                    owner: self
+                });
+            });
+
             var mapToObservables = function (data, mapping, local, keyPrefix) {
                 if (!_.isPlainObject(data)) {
                     return;
@@ -1324,6 +1247,11 @@ $(function () {
 
                     if (self.observableCopies.hasOwnProperty(observable)) {
                         // only a copy, skip
+                        return;
+                    }
+
+                    if (self.webcamCompat.hasOwnProperty(observable)) {
+                        // webcam compat layer, skip
                         return;
                     }
 
@@ -1355,6 +1283,15 @@ $(function () {
             mapToObservables(serverChangedData, specialMappings, clientChangedData);
 
             firstRequest.resolve();
+
+            // special delivery for the API key flag
+            self.apiKeyVisible(self.loginState.checkCredentialsSeen());
+            if (self.apiKeyVisible()) {
+                self.reauthenticationTimeout =
+                    self.loginState.afterReauthenticationTimeout(() => {
+                        self.requestData();
+                    }, self.reauthenticationTimeout);
+            }
         };
 
         self.cancelData = function () {
@@ -1510,10 +1447,26 @@ $(function () {
             self.requestData();
         };
 
-        self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
-            // we might have other user rights now, refresh (but only if startup has fully completed)
-            if (!self._startupComplete) return;
-            self.requestData();
+        self.onUserPermissionsChanged =
+            self.onUserLoggedIn =
+            self.onUserLoggedOut =
+                function () {
+                    // we might have other user rights now, refresh (but only if startup has fully completed)
+                    if (!self._startupComplete) return;
+                    self.requestData();
+                };
+
+        self.validURL = function (str) {
+            var pattern = new RegExp(
+                "^(https?:\\/\\/)?" + // protocol
+                    "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|" + // domain name
+                    "((\\d{1,3}\\.){3}\\d{1,3}))" + // OR ip (v4) address
+                    "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // port and path
+                    "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
+                    "(\\#[-a-z\\d_]*)?$",
+                "i"
+            ); // fragment locator
+            return !!pattern.test(str);
         };
     }
 

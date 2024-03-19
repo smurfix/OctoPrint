@@ -1,22 +1,25 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, unicode_literals
-
-import io
 import os
 import threading
+import time
 from collections import defaultdict
 
 import flask
-import yaml
 from flask_babel import gettext
 
 import octoprint.plugin
-from octoprint.access import ADMIN_GROUP
+from octoprint.access import ADMIN_GROUP, USER_GROUP
 from octoprint.access.permissions import Permissions
-from octoprint.server import NO_CONTENT, admin_permission, current_user
-from octoprint.server.util.flask import no_firstrun_access, restricted_access
+from octoprint.server import NO_CONTENT, current_user
+from octoprint.server.util import require_fresh_login_with
+from octoprint.server.util.flask import (
+    add_non_caching_response_headers,
+    credentials_checked_recently,
+    ensure_credentials_checked_recently,
+    no_firstrun_access,
+    restricted_access,
+)
 from octoprint.settings import valid_boolean_trues
-from octoprint.util import ResettableTimer, atomic_write, generate_api_key, monotonic_time
+from octoprint.util import ResettableTimer, atomic_write, generate_api_key, yaml
 
 CUTOFF_TIME = 10 * 60  # 10min
 POLL_TIMEOUT = 5  # 5 seconds
@@ -26,13 +29,13 @@ class AppAlreadyExists(Exception):
     pass
 
 
-class PendingDecision(object):
+class PendingDecision:
     def __init__(self, app_id, app_token, user_id, user_token, timeout_callback=None):
         self.app_id = app_id
         self.app_token = app_token
         self.user_id = user_id
         self.user_token = user_token
-        self.created = monotonic_time()
+        self.created = time.monotonic()
 
         if callable(timeout_callback):
             self.poll_timeout = ResettableTimer(
@@ -53,7 +56,7 @@ class PendingDecision(object):
         )
 
 
-class ReadyDecision(object):
+class ReadyDecision:
     def __init__(self, app_id, app_token, user_id):
         self.app_id = app_id
         self.app_token = app_token
@@ -69,14 +72,17 @@ class ReadyDecision(object):
         )
 
 
-class ActiveKey(object):
+class ActiveKey:
     def __init__(self, app_id, api_key, user_id):
         self.app_id = app_id
         self.api_key = api_key
         self.user_id = user_id
 
-    def external(self):
-        return {"app_id": self.app_id, "api_key": self.api_key, "user_id": self.user_id}
+    def external(self, incl_key=False):
+        result = {"app_id": self.app_id, "user_id": self.user_id}
+        if incl_key:
+            result["api_key"] = self.api_key
+        return result
 
     def internal(self):
         return {"app_id": self.app_id, "api_key": self.api_key}
@@ -124,7 +130,14 @@ class AppKeysPlugin(
                 "roles": ["admin"],
                 "dangerous": True,
                 "default_groups": [ADMIN_GROUP],
-            }
+            },
+            {
+                "key": "GRANT",
+                "name": "Grant access",
+                "description": gettext("Allows to grant app access"),
+                "roles": ["user"],
+                "default_groups": [USER_GROUP],
+            },
         ]
 
     ##~~ TemplatePlugin
@@ -153,6 +166,7 @@ class AppKeysPlugin(
         return NO_CONTENT
 
     @octoprint.plugin.BlueprintPlugin.route("/request", methods=["POST"])
+    @octoprint.plugin.BlueprintPlugin.csrf_exempt()
     @no_firstrun_access
     def handle_request(self):
         data = flask.request.json
@@ -168,6 +182,9 @@ class AppKeysPlugin(
             user_id = data["user"]
 
         app_token, user_token = self._add_pending_decision(app_name, user_id=user_id)
+        auth_dialog = flask.url_for(
+            "plugin.appkeys.handle_auth_dialog", app_token=app_token, _external=True
+        ) + (f"?user={user_id}" if user_id else "")
 
         self._plugin_manager.send_plugin_message(
             self._identifier,
@@ -178,14 +195,14 @@ class AppKeysPlugin(
                 "user_id": user_id,
             },
         )
-        response = flask.jsonify(app_token=app_token)
+        response = flask.jsonify(app_token=app_token, auth_dialog=auth_dialog)
         response.status_code = 201
         response.headers["Location"] = flask.url_for(
             ".handle_decision_poll", app_token=app_token, _external=True
         )
         return response
 
-    @octoprint.plugin.BlueprintPlugin.route("/request/<app_token>")
+    @octoprint.plugin.BlueprintPlugin.route("/request/<app_token>", methods=["GET"])
     @no_firstrun_access
     def handle_decision_poll(self, app_token):
         result = self._get_pending_by_app_token(app_token)
@@ -203,12 +220,63 @@ class AppKeysPlugin(
 
         return flask.abort(404)
 
+    @octoprint.plugin.BlueprintPlugin.route("/auth/<app_token>", methods=["GET"])
+    @no_firstrun_access
+    def handle_auth_dialog(self, app_token):
+        from octoprint.server.util.csrf import add_csrf_cookie
+
+        user_id = current_user.get_name()
+        required_user = flask.request.args.get("user", None)
+
+        pendings = self._get_pending_by_app_token(app_token)
+        if not pendings:
+            return flask.abort(404)
+
+        response = require_fresh_login_with(
+            permissions=[Permissions.PLUGIN_APPKEYS_GRANT], user_id=required_user
+        )
+        if response:
+            return response
+
+        pending = None
+        for p in pendings:
+            if p.user_id == required_user or (not required_user and p.user_id == user_id):
+                pending = p
+                break
+        else:
+            return flask.abort(404)
+
+        app_id = pending.app_id
+        user_token = pending.user_token
+        redirect_url = flask.request.args.get("redirect", "")
+
+        response = flask.make_response(
+            flask.render_template(
+                "plugin_appkeys/appkeys_authdialog.jinja2",
+                app=app_id,
+                user=user_id,
+                user_token=user_token,
+                redirect_url=redirect_url,
+                theming=[],
+                request_text=gettext(
+                    '"<strong>%(app)s</strong>" has requested access to control OctoPrint through the API.'
+                ).replace("%(app)s", app_id),
+            )
+        )
+        return add_csrf_cookie(add_non_caching_response_headers(response))
+
     @octoprint.plugin.BlueprintPlugin.route("/decision/<user_token>", methods=["POST"])
     @restricted_access
     def handle_decision(self, user_token):
         data = flask.request.json
         if "decision" not in data:
             flask.abort(400, description="No decision provided")
+
+        if not Permissions.PLUGIN_APPKEYS_GRANT.can():
+            flask.abort(403, description="No permission to grant app access")
+
+        ensure_credentials_checked_recently()
+
         decision = data["decision"] in valid_boolean_trues
         user_id = current_user.get_name()
 
@@ -226,26 +294,51 @@ class AppKeysPlugin(
     def is_blueprint_protected(self):
         return False  # No API key required to request API access
 
+    def is_blueprint_csrf_protected(self):
+        return True  # protect anything that isn't explicitly marked as exempt
+
     ##~~ SimpleApiPlugin mixin
 
     def get_api_commands(self):
-        return {"generate": ["app"], "revoke": ["key"]}
+        return {"generate": ["app"], "revoke": []}
 
     def on_api_get(self, request):
         user_id = current_user.get_name()
         if not user_id:
             return flask.abort(403)
 
+        # GET ?app_id=...[&user_id=...]
+        if request.values.get("app"):
+            app_id = request.values.get("app")
+            user_id = request.values.get("user", user_id)
+            if (
+                user_id != current_user.get_name()
+                and not Permissions.PLUGIN_APPKEYS_ADMIN.can()
+            ):
+                return flask.abort(403)
+
+            key = self._api_key_for_user_and_app_id(user_id, app_id)
+            if not key:
+                return flask.abort(404)
+
+            return flask.jsonify(
+                key=key.external(incl_key=credentials_checked_recently())
+            )
+
+        # GET ?all=true (admin only)
         if (
             request.values.get("all") in valid_boolean_trues
             and Permissions.PLUGIN_APPKEYS_ADMIN.can()
         ):
             keys = self._all_api_keys()
+
         else:
             keys = self._api_keys_for_user(user_id)
 
         return flask.jsonify(
-            keys=list(map(lambda x: x.external(), keys)),
+            keys=list(
+                map(lambda x: x.external(), keys),
+            ),
             pending={
                 x.user_token: x.external() for x in self._get_pending_by_user_id(user_id)
             },
@@ -258,13 +351,37 @@ class AppKeysPlugin(
 
         if command == "revoke":
             api_key = data.get("key")
-            if not api_key:
-                return flask.abort(400)
 
-            if not admin_permission.can():
+            if api_key:
+                # deprecated key based revoke?
+                from flask import request
+
+                from octoprint.server.util import get_remote_address
+
+                self._logger.warning(
+                    "Deprecated key based revoke command sent to /api/plugin/appkeys by {}, should be migrated to use app id/user tuple".format(
+                        get_remote_address(request)
+                    )
+                )
+
+            else:
+                # newer app/user based revoke?
+                user = data.get("user", user_id)
+                app = data.get("app")
+                if not app:
+                    return flask.abort(400, description="Need either app or key")
+
+                api_key = self._api_key_for_user_and_app_id(user, app)
+
+            if not api_key:
+                return flask.abort(400, description="Need either app or key")
+
+            if not Permissions.PLUGIN_APPKEYS_ADMIN.can():
                 user_for_key = self._user_for_api_key(api_key)
                 if user_for_key is None or user_for_key.user_id != user_id:
                     return flask.abort(403)
+
+            ensure_credentials_checked_recently()
 
             self._delete_api_key(api_key)
 
@@ -277,6 +394,8 @@ class AppKeysPlugin(
             selected_user_id = data.get("user", user_id)
             if selected_user_id != user_id and not Permissions.PLUGIN_APPKEYS_ADMIN.can():
                 return flask.abort(403)
+
+            ensure_credentials_checked_recently()
 
             key = self._add_api_key(selected_user_id, app_name.strip())
             return flask.jsonify(user_id=selected_user_id, app_id=app_name, api_key=key)
@@ -341,7 +460,7 @@ class AppKeysPlugin(
 
     def _remove_stale_pending(self):
         with self._pending_lock:
-            cutoff = monotonic_time() - CUTOFF_TIME
+            cutoff = time.monotonic() - CUTOFF_TIME
             len_before = len(self._pending_decisions)
             self._pending_decisions = list(
                 filter(lambda x: x.created >= cutoff, self._pending_decisions)
@@ -409,12 +528,18 @@ class AppKeysPlugin(
             return key.api_key
 
     def _delete_api_key(self, api_key):
+        if isinstance(api_key, ActiveKey):
+            api_key = api_key.api_key
+
         with self._keys_lock:
             for user_id, data in self._keys.items():
                 self._keys[user_id] = list(filter(lambda x: x.api_key != api_key, data))
             self._save_keys()
 
     def _user_for_api_key(self, api_key):
+        if isinstance(api_key, ActiveKey):
+            api_key = api_key.api_key
+
         with self._keys_lock:
             for user_id, data in self._keys.items():
                 if any(filter(lambda x: x.api_key == api_key, data)):
@@ -432,6 +557,17 @@ class AppKeysPlugin(
                 result += keys
         return result
 
+    def _api_key_for_user_and_app_id(self, user_id, app_id):
+        with self._keys_lock:
+            if user_id not in self._keys:
+                return None
+
+            for key in self._keys[user_id]:
+                if key.app_id.lower() == app_id.lower():
+                    return key
+
+        return None
+
     def _generate_key(self):
         return generate_api_key()
 
@@ -441,13 +577,10 @@ class AppKeysPlugin(
                 return
 
             try:
-                with io.open(
-                    self._key_path, "rt", encoding="utf-8", errors="strict"
-                ) as f:
-                    persisted = yaml.safe_load(f)
+                persisted = yaml.load_from_file(path=self._key_path)
             except Exception:
                 self._logger.exception(
-                    "Could not load application keys from {}".format(self._key_path)
+                    f"Could not load application keys from {self._key_path}"
                 )
                 return
 
@@ -469,10 +602,10 @@ class AppKeysPlugin(
 
             try:
                 with atomic_write(self._key_path, mode="wt") as f:
-                    yaml.safe_dump(to_persist, f, allow_unicode=True)
+                    yaml.save_to_file(to_persist, file=f)
             except Exception:
                 self._logger.exception(
-                    "Could not write application keys to {}".format(self._key_path)
+                    f"Could not write application keys to {self._key_path}"
                 )
 
 
@@ -486,7 +619,7 @@ __plugin_disabling_discouraged__ = gettext(
     "obtain an API key without you manually copy-pasting it."
 )
 __plugin_license__ = "AGPLv3"
-__plugin_pythoncompat__ = ">=2.7,<4"
+__plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_implementation__ = AppKeysPlugin()
 __plugin_hooks__ = {
     "octoprint.accesscontrol.keyvalidator": __plugin_implementation__.validate_api_key,

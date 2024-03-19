@@ -97,7 +97,7 @@ following section *completely* and also follow the instructions in the
    **safe mode**, either by selecting "Restart OctoPrint in safe mode" from
    the "System" menu, or by starting OctoPrint from the command line with
    `octoprint serve --safe`. Then try to reproduce your issue. Find out
-   more about safe mode in the [docs](http://docs.octoprint.org/en/master/features/safemode.html).
+   more about safe mode in the [docs](https://docs.octoprint.org/en/master/features/safemode.html).
 
    You might also want to try the current development version of OctoPrint
    (if you aren't already). Refer to the [FAQ](https://faq.octoprint.org)
@@ -142,7 +142,7 @@ existing ticket**:
 <!--
 READ THE FOLLOWING FIRST:
 
-If not already done, please read the the Contribution Guidelines that
+If not already done, please read the Contribution Guidelines that
 are linked to the right under "Helpful resources" > "Contributing".
 
 Also read the FAQ: https://faq.octoprint.org

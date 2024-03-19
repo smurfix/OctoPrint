@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
+import asyncio
 import logging
 import mimetypes
 import os
 import re
 import sys
+from urllib.parse import urlparse
 
 import tornado
 import tornado.escape
@@ -22,16 +21,11 @@ import tornado.iostream
 import tornado.tcpserver
 import tornado.util
 import tornado.web
-from past.builtins import basestring, unicode
+from tornado.concurrent import dummy_executor
+from tornado.ioloop import IOLoop
+from zipstream.ng import ZIP_DEFLATED, ZipStream
 
 import octoprint.util
-
-try:
-    from urllib.parse import urlparse  # py3
-except ImportError:
-    from urlparse import urlparse  # py2
-
-from . import PY3
 
 
 def fix_json_encode():
@@ -54,6 +48,18 @@ def fix_json_encode():
     tornado.escape.json_encode = fixed_json_encode
 
 
+def enable_per_message_deflate_extension():
+    """
+    This configures tornado.websocket.WebSocketHandler.get_compression_options to support the permessage-deflate extension
+    to the websocket protocol, minimizing data bandwidth if clients support the extension as well
+    """
+
+    def get_compression_options(self):
+        return {"compression_level": 1, "mem_level": 1}
+
+    tornado.websocket.WebSocketHandler.get_compression_options = get_compression_options
+
+
 def fix_websocket_check_origin():
     """
     This fixes tornado.websocket.WebSocketHandler.check_origin to do the same origin check against the Host
@@ -69,13 +75,15 @@ def fix_websocket_check_origin():
             return (
                 scheme,
                 parsed.hostname,
-                parsed.port
-                if parsed.port
-                else 80
-                if scheme == "http"
-                else 443
-                if scheme == "https"
-                else None,
+                (
+                    parsed.port
+                    if parsed.port
+                    else 80
+                    if scheme == "http"
+                    else 443
+                    if scheme == "https"
+                    else None
+                ),
             )
 
         return get_check_tuple(origin) == get_check_tuple(self.request.full_url())
@@ -89,7 +97,6 @@ def fix_websocket_check_origin():
 
 
 class RequestlessExceptionLoggingMixin(tornado.web.RequestHandler):
-
     LOG_REQUEST = False
 
     def log_exception(self, typ, value, tb, *args, **kwargs):
@@ -307,6 +314,7 @@ class UploadStorageFallbackHandler(RequestlessExceptionLoggingMixin, CorsSupport
         else:
             self._fallback(self.request, b"")
             self._finished = True
+            self.on_finish()
 
     def data_received(self, chunk):
         """
@@ -560,7 +568,7 @@ class UploadStorageFallbackHandler(RequestlessExceptionLoggingMixin, CorsSupport
                 self._new_body += value + b"\r\n"
         self._new_body += b"--%s--\r\n" % self._multipart_boundary
 
-    def _handle_method(self, *args, **kwargs):
+    async def _handle_method(self, *args, **kwargs):
         """
         Takes care of defining the new request body if necessary and forwarding
         the current request and changed body to the ``fallback``.
@@ -580,17 +588,26 @@ class UploadStorageFallbackHandler(RequestlessExceptionLoggingMixin, CorsSupport
             # directly use data from buffer
             body = self._buffer
 
-        # rewrite content length
         self.request.headers["Content-Length"] = len(body)
 
         try:
             # call the configured fallback with request and body to use
-            self._fallback(self.request, body)
-            self._headers_written = True
+            result = self._fallback(self.request, body)
+            if result is not None:
+                await result
         finally:
-            # make sure the temporary files are removed again
-            for f in self._files:
-                octoprint.util.silent_remove(f)
+            self._finished = True
+            self.on_finish()
+
+    def on_finish(self):
+        self._cleanup_files()
+
+    def _cleanup_files(self):
+        """
+        Removes all temporary files created by this handler.
+        """
+        for f in self._files:
+            octoprint.util.silent_remove(f)
 
     # make all http methods trigger _handle_method
     get = _handle_method
@@ -634,23 +651,16 @@ def _extended_header_value(value):
 
     if value.lower().startswith("iso-8859-1'") or value.lower().startswith("utf-8'"):
         # RFC 5987 section 3.2
-        try:
-            from urllib import unquote
-        except ImportError:
-            from urllib.parse import unquote
+        from urllib.parse import unquote
+
         encoding, _, value = value.split("'", 2)
-        if PY3:
-            return unquote(value, encoding=encoding)
-        else:
-            return unquote(octoprint.util.to_bytes(value, encoding="iso-8859-1")).decode(
-                encoding
-            )
+        return unquote(value, encoding=encoding)
     else:
         # no encoding provided, strip potentially present quotes and call it a day
         return octoprint.util.to_unicode(_strip_value_quotes(value), encoding="utf-8")
 
 
-class WsgiInputContainer(object):
+class WsgiInputContainer:
     """
     A WSGI container for use with Tornado that allows supplying the request body to be used for ``wsgi.input`` in the
     generated WSGI environment upon call.
@@ -668,12 +678,21 @@ class WsgiInputContainer(object):
 
     The implementation logic is basically the same as ``tornado.wsgi.WSGIContainer`` but the ``__call__`` and ``environ``
     methods have been adjusted to allow for an optionally supplied ``body`` argument which is then used for ``wsgi.input``.
+
+    Additionally, some headers can be added or removed from the response by supplying ``forced_headers`` and
+    ``removed_headers`` arguments. ``forced_headers`` will be added to the response, ``removed_headers`` will be removed.
     """
 
     def __init__(
-        self, wsgi_application, headers=None, forced_headers=None, removed_headers=None
+        self,
+        wsgi_application,
+        executor=None,
+        headers=None,
+        forced_headers=None,
+        removed_headers=None,
     ):
         self.wsgi_application = wsgi_application
+        self.executor = dummy_executor if executor is None else executor
 
         if headers is None:
             headers = {}
@@ -687,11 +706,19 @@ class WsgiInputContainer(object):
         self.removed_headers = removed_headers
 
     def __call__(self, request, body=None):
+        future = tornado.concurrent.Future()
+        IOLoop.current().spawn_callback(
+            self.handle_request, request, body=body, future=future
+        )
+        return future
+
+    async def handle_request(self, request, body=None, future=None):
         """
         Wraps the call against the WSGI app, deriving the WSGI environment from the supplied Tornado ``HTTPServerRequest``.
 
         :param request: the ``tornado.httpserver.HTTPServerRequest`` to derive the WSGI environment from
         :param body: an optional body  to use as ``wsgi.input`` instead of ``request.body``, can be a string or a stream
+        :param future: a future to complete after the request has been handled
         """
 
         data = {}
@@ -702,48 +729,72 @@ class WsgiInputContainer(object):
             data["headers"] = response_headers
             return response.append
 
-        app_response = self.wsgi_application(
-            WsgiInputContainer.environ(request, body), start_response
-        )
         try:
-            response.extend(app_response)
+            loop = IOLoop.current()
+            app_response = await loop.run_in_executor(
+                self.executor,
+                self.wsgi_application,
+                self.environ(request, body),
+                start_response,
+            )
+            try:
+                app_response_iter = iter(app_response)
+
+                def next_chunk():
+                    try:
+                        return next(app_response_iter)
+                    except StopIteration:
+                        return None
+
+                while True:
+                    chunk = await loop.run_in_executor(self.executor, next_chunk)
+                    if chunk is None:
+                        break
+                    response.append(chunk)
+            finally:
+                if hasattr(app_response, "close"):
+                    app_response.close()
             body = b"".join(response)
-        finally:
-            if hasattr(app_response, "close"):
-                app_response.close()
-        if not data:
-            raise Exception("WSGI app did not call start_response")
+            if not data:
+                raise Exception("WSGI app did not call start_response")
 
-        status_code, reason = data["status"].split(" ", 1)
-        status_code = int(status_code)
-        headers = data["headers"]
-        header_set = {k.lower() for (k, v) in headers}
-        body = tornado.escape.utf8(body)
-        if status_code != 304:
-            if "content-length" not in header_set:
-                headers.append(("Content-Length", str(len(body))))
-            if "content-type" not in header_set:
-                headers.append(("Content-Type", "text/html; charset=UTF-8"))
+            status_code_str, reason = data["status"].split(" ", 1)
+            status_code = int(status_code_str)
+            headers = data["headers"]
+            header_set = {k.lower() for (k, v) in headers}
+            body = tornado.escape.utf8(body)
+            if status_code != 304:
+                if "content-length" not in header_set:
+                    headers.append(("Content-Length", str(len(body))))
+                if "content-type" not in header_set:
+                    headers.append(("Content-Type", "text/html; charset=UTF-8"))
 
-        header_set = {k.lower() for (k, v) in headers}
-        for header, value in self.headers.items():
-            if header.lower() not in header_set:
+            header_set = {k.lower() for (k, v) in headers}
+            for header, value in self.headers.items():
+                if header.lower() not in header_set:
+                    headers.append((header, value))
+            for header, value in self.forced_headers.items():
                 headers.append((header, value))
-        for header, value in self.forced_headers.items():
-            headers.append((header, value))
-        headers = [
-            (header, value)
-            for header, value in headers
-            if header.lower() not in self.removed_headers
-        ]
+            headers = [
+                (header, value)
+                for header, value in headers
+                if header.lower() not in self.removed_headers
+            ]
 
-        start_line = tornado.httputil.ResponseStartLine("HTTP/1.1", status_code, reason)
-        header_obj = tornado.httputil.HTTPHeaders()
-        for key, value in headers:
-            header_obj.add(key, value)
-        request.connection.write_headers(start_line, header_obj, chunk=body)
-        request.connection.finish()
-        self._log(status_code, request)
+            start_line = tornado.httputil.ResponseStartLine(
+                "HTTP/1.1", status_code, reason
+            )
+            header_obj = tornado.httputil.HTTPHeaders()
+            for key, value in headers:
+                header_obj.add(key, value)
+            assert request.connection is not None
+            request.connection.write_headers(start_line, header_obj, chunk=body)
+            request.connection.finish()
+            self._log(status_code, request)
+
+        finally:
+            if future is not None:
+                future.set_result(None)
 
     @staticmethod
     def environ(request, body=None):
@@ -762,7 +813,7 @@ class WsgiInputContainer(object):
 
         # determine the request_body to supply as wsgi.input
         if body is not None:
-            if isinstance(body, (bytes, str, unicode)):
+            if isinstance(body, (bytes, str)):
                 request_body = io.BytesIO(tornado.escape.utf8(body))
             else:
                 request_body = body
@@ -799,6 +850,14 @@ class WsgiInputContainer(object):
             environ["CONTENT_TYPE"] = request.headers.pop("Content-Type")
         if "Content-Length" in request.headers:
             environ["CONTENT_LENGTH"] = request.headers.pop("Content-Length")
+
+        # remove transfer encoding header if chunked, otherwise flask wsgi entrypoint makes input empty
+        if (
+            "Transfer-Encoding" in request.headers
+            and request.headers.get("Transfer-Encoding") == "chunked"
+        ):
+            request.headers.pop("Transfer-Encoding")
+
         for key, value in request.headers.items():
             environ["HTTP_" + key.replace("-", "_").upper()] = value
         return environ
@@ -870,8 +929,7 @@ class CustomHTTP1ServerConnection(tornado.http1connection.HTTP1ServerConnection)
     otherwise the same as ``tornado.http1connection.HTTP1ServerConnection``.
     """
 
-    @tornado.gen.coroutine
-    def _server_request_loop(self, delegate):
+    async def _server_request_loop(self, delegate):
         try:
             while True:
                 conn = CustomHTTP1Connection(
@@ -879,10 +937,11 @@ class CustomHTTP1ServerConnection(tornado.http1connection.HTTP1ServerConnection)
                 )
                 request_delegate = delegate.start_request(self, conn)
                 try:
-                    ret = yield conn.read_response(request_delegate)
+                    ret = await conn.read_response(request_delegate)
                 except (
                     tornado.iostream.StreamClosedError,
                     tornado.iostream.UnsatisfiableReadError,
+                    asyncio.CancelledError,
                 ):
                     return
                 except tornado.http1connection._QuietException:
@@ -897,7 +956,7 @@ class CustomHTTP1ServerConnection(tornado.http1connection.HTTP1ServerConnection)
                     return
                 if not ret:
                     return
-                yield tornado.gen.moment
+                await asyncio.sleep(0)
         finally:
             delegate.on_close(self)
 
@@ -921,7 +980,7 @@ class CustomHTTP1Connection(tornado.http1connection.HTTP1Connection):
         self._max_body_sizes = list(
             map(
                 lambda x: (x[0], re.compile(x[1]), x[2]),
-                self.params.max_body_sizes or list(),
+                self.params.max_body_sizes or [],
             )
         )
         self._default_max_body_size = (
@@ -1189,6 +1248,8 @@ class LargeResponseHandler(
             self.set_header("Cache-Control", "max-age=0, must-revalidate, private")
             self.set_header("Expires", "-1")
 
+        self.set_header("X-Original-Content-Length", str(self.get_content_size()))
+
     @property
     def original_absolute_path(self):
         """The path of the uncompressed file corresponding to the compressed file"""
@@ -1203,7 +1264,7 @@ class LargeResponseHandler(
             etag = str(self.get_content_version(self.absolute_path))
 
         if not etag.endswith('"'):
-            etag = '"{}"'.format(etag)
+            etag = f'"{etag}"'
         return etag
 
     # noinspection PyAttributeOutsideInit
@@ -1347,7 +1408,7 @@ class UrlProxyHandler(
         if not extension:
             return None
 
-        return "{}{}".format(self._basename, extension)
+        return f"{self._basename}{extension}"
 
 
 class StaticDataHandler(
@@ -1374,6 +1435,106 @@ class StaticDataHandler(
         self.finish()
 
 
+class GeneratingDataHandler(
+    RequestlessExceptionLoggingMixin, CorsSupportMixin, tornado.web.RequestHandler
+):
+    """
+    A `RequestHandler` that generates data from a generator function and returns it to the client.
+
+    Arguments:
+        generator (function): A generator function that returns the data to be written to the client. The function
+            will be called without any parameters.
+        content_type (str): The content type with which to respond. Defaults to `text/plain`
+        as_attachment (bool | str): Whether to serve files with `Content-Disposition: attachment` header (`True`)
+            or not. Defaults to `False`. If a string is given it will be used as the filename of the attachment.
+        access_validation (function): Callback to call in the `get` method to validate access to the resource. Will
+            be called with `self.request` as parameter which contains the full tornado request object. Should raise
+            a `tornado.web.HTTPError` if access is not allowed in which case the request will not be further processed.
+            Defaults to `None` and hence no access validation being performed.
+    """
+
+    def initialize(
+        self,
+        generator=None,
+        content_type="text/plain",
+        as_attachment=False,
+        access_validation=None,
+    ):
+        super().initialize()
+        self._generator = generator
+        self._content_type = content_type
+        self._as_attachment = as_attachment
+        self._access_validation = access_validation
+
+    @tornado.gen.coroutine
+    def get(self, *args, **kwargs):
+        if self._access_validation is not None:
+            self._access_validation(self.request)
+
+        self.set_status(200)
+        self.set_header("Content-Type", self._content_type)
+        self.set_content_disposition()
+        for data in self._generator():
+            self.write(data)
+            yield self.flush()
+        self.finish()
+
+    def set_content_disposition(self):
+        if self._as_attachment:
+            if isinstance(self._as_attachment, str):
+                self.set_header(
+                    "Content-Disposition", f"attachment; filename={self._as_attachment}"
+                )
+            else:
+                self.set_header("Content-Disposition", "attachment")
+
+
+class WebcamSnapshotHandler(GeneratingDataHandler):
+    """
+    `GeneratingDataHandler` that returns a snapshot from the configured webcam.
+
+    Arguments:
+        as_attachment (bool | str): Whether to serve files with `Content-Disposition: attachment` header (`True`)
+            or not. Defaults to `False`. If a string is given it will be used as the filename of the attachment.
+        access_validation (function): Callback to call in the `get` method to validate access to the resource. Will
+            be called with `self.request` as parameter which contains the full tornado request object. Should raise
+            a `tornado.web.HTTPError` if access is not allowed in which case the request will not be further processed.
+            Defaults to `None` and hence no access validation being performed.
+    """
+
+    def initialize(self, as_attachment=False, access_validation=None):
+        super().initialize(
+            content_type="image/jpeg",
+            as_attachment=as_attachment,
+            access_validation=access_validation,
+        )
+
+    @tornado.gen.coroutine
+    def get(self, *args, **kwargs):
+        if self._access_validation is not None:
+            self._access_validation(self.request)
+
+        import functools
+
+        from octoprint.webcams import get_snapshot_webcam
+
+        webcam = get_snapshot_webcam()
+        if not webcam:
+            raise tornado.web.HTTPError(404)
+
+        generator = functools.partial(
+            webcam.providerPlugin.take_webcam_snapshot, webcam.config.name
+        )
+
+        self.set_status(200)
+        self.set_header("Content-Type", self._content_type)
+        self.set_content_disposition()
+        for data in generator():
+            self.write(data)
+            yield self.flush()
+        self.finish()
+
+
 class DeprecatedEndpointHandler(CorsSupportMixin, tornado.web.RequestHandler):
     """
     `tornado.web.RequestHandler <http://tornado.readthedocs.org/en/branch4.0/web.html#request-handlers>`_ that redirects
@@ -1390,7 +1551,7 @@ class DeprecatedEndpointHandler(CorsSupportMixin, tornado.web.RequestHandler):
     def _handle_method(self, *args, **kwargs):
         to_url = self._url.format(*args)
         self._logger.info(
-            "Redirecting deprecated endpoint {} to {}".format(self.request.path, to_url)
+            f"Redirecting deprecated endpoint {self.request.path} to {to_url}"
         )
         self.redirect(to_url, permanent=True)
 
@@ -1432,11 +1593,10 @@ class StaticZipBundleHandler(CorsSupportMixin, tornado.web.RequestHandler):
     def get_attachment_name(self):
         return self._attachment_name
 
-    # noinspection PyCompatibility
     def normalize_files(self, files):
         result = []
         for f in files:
-            if isinstance(f, basestring):
+            if isinstance(f, str):
                 result.append({"path": f})
             elif isinstance(f, dict) and ("path" in f or "iter" in f or "content" in f):
                 result.append(f)
@@ -1448,35 +1608,30 @@ class StaticZipBundleHandler(CorsSupportMixin, tornado.web.RequestHandler):
         if self._as_attachment:
             self.set_header(
                 "Content-Disposition",
-                'attachment; filename="{}"'.format(self.get_attachment_name()),
+                f'attachment; filename="{self.get_attachment_name()}"',
             )
 
-        import zipstream
-
-        compress_type = zipstream.ZIP_STORED
+        z = ZipStream(sized=True)
         if self._compress:
             try:
-                import zlib  # noqa: F401
-
-                compress_type = zipstream.ZIP_DEFLATED
-            except ImportError:
-                # no zlib, no compression
+                z = ZipStream(compress_type=ZIP_DEFLATED)
+            except RuntimeError:
+                # no zlib support
                 pass
 
-        z = zipstream.ZipFile()
         for f in self.normalize_files(files):
-            # noinspection PyCompatibility
             name = f.get("name")
             path = f.get("path")
-            iter = f.get("iter")
-            content = f.get("content")
+            data = f.get("iter") or f.get("content")
 
             if path:
-                z.write(path, arcname=name, compress_type=compress_type)
-            elif iter and name:
-                z.write_iter(name, iter, compress_type=compress_type)
-            elif content and name:
-                z.writestr(name, content, compress_type=compress_type)
+                z.add_path(path, arcname=name)
+            elif data and name:
+                z.add(data, arcname=name)
+
+        if z.sized:
+            self.set_header("Content-Length", len(z))
+        self.set_header("Last-Modified", z.last_modified)
 
         for chunk in z:
             try:
@@ -1580,6 +1735,7 @@ class SystemInfoBundleHandler(CorsSupportMixin, tornado.web.RequestHandler):
         systeminfo = get_systeminfo(
             environmentDetector,
             connectivityChecker,
+            settings(),
             {
                 "browser.user_agent": self.request.headers.get("User-Agent"),
                 "octoprint.safe_mode": safe_mode is not None,
@@ -1597,8 +1753,11 @@ class SystemInfoBundleHandler(CorsSupportMixin, tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/zip")
         self.set_header(
             "Content-Disposition",
-            'attachment; filename="{}"'.format(get_systeminfo_bundle_name()),
+            f'attachment; filename="{get_systeminfo_bundle_name()}"',
         )
+        if z.sized:
+            self.set_header("Content-Length", len(z))
+        self.set_header("Last-Modified", z.last_modified)
 
         for chunk in z:
             try:
@@ -1614,7 +1773,6 @@ class SystemInfoBundleHandler(CorsSupportMixin, tornado.web.RequestHandler):
 
 
 class GlobalHeaderTransform(tornado.web.OutputTransform):
-
     HEADERS = {}
     FORCED_HEADERS = {}
     REMOVED_HEADERS = []
@@ -1629,7 +1787,7 @@ class GlobalHeaderTransform(tornado.web.OutputTransform):
             removed_headers = []
 
         return type(
-            octoprint.util.to_native_str(name),
+            name,
             (GlobalHeaderTransform,),
             {
                 "HEADERS": headers,
@@ -1672,6 +1830,7 @@ def access_validation_factory(app, validator, *args):
         :param request: The Tornado request for which to create the environment and context
         """
         import flask
+        from werkzeug.exceptions import HTTPException
 
         wsgi_environ = WsgiInputContainer.environ(request)
         with app.request_context(wsgi_environ):
@@ -1687,7 +1846,10 @@ def access_validation_factory(app, validator, *args):
                 user = app.login_manager._user_callback(user_id)
             app.login_manager._update_request_context_with_user(user)
 
-            validator(flask.request, *args)
+            try:
+                validator(flask.request, *args)
+            except HTTPException as e:
+                raise tornado.web.HTTPError(e.code)
 
     return f
 

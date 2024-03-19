@@ -16,7 +16,7 @@
         </button>
     </div>
 
-    <div class="progress progress-text-centered">
+    <div class="progress progress-text-centered" data-bind="css: { 'active': ui_progress_busy, 'progress-striped': ui_progress_busy }">
         <div class="bar" data-bind="style: { width: ui_progress_percentage() + '%' }"></div>
 	<span class="progress-text-back" data-bind="css: { 'progress-text-front': (ui_progress_percentage() >= 50), 'progress-text-back': (ui_progress_percentage() < 50) }, text: ui_progress_text()"></span>
     </div>
@@ -103,9 +103,6 @@
                         <label class="checkbox">
                             <input type="checkbox" data-bind="checked: reader_hideEmptyLayers">{{ _('Hide empty layers') }} <span class="label">{{ _('Causes reload') }}</span>
                         </label>
-                        <label class="checkbox">
-                            <input type="checkbox" data-bind="checked: reader_sortLayers">{{ _('Sort layers') }} <span class="label">{{ _('Causes reload') }}</span>
-                        </label>
                     </p>
                     <p>
                         <button class="btn btn-block" data-bind="click: resetOptions">{{ _('Reset options') }}</button>
@@ -128,7 +125,7 @@
 <div data-bind="visible: waitForApproval">
     <h1>{{ _('Warning') }}</h1>
     {% trans %}<p>
-        You've selected <strong data-bind="text: selectedFile.name"></strong> for printing which has a size of
+        You've selected <strong data-bind="text: selectedFile.path"></strong> for printing which has a size of
         <strong data-bind="text: formatSize(selectedFile.size())"></strong>. Depending on your machine this
         might be too large for rendering and cause your browser to become unresponsive or crash.
     </p>
@@ -137,7 +134,26 @@
         Are you sure you want to visualize this file nevertheless?
     </p>{% endtrans %}
 
-    <button class="btn btn-warning btn-block" data-bind="click: approveLargeFile">
-        {{ _('Yes, please visualize %(name)s regardless of its size', name='<span data-bind="text: selectedFile.name"></span>') }}
-    </button>
+    <p>
+        <button class="btn btn-warning btn-block" data-bind="click: approveLargeFile">
+            {{ _('Yes, please visualize %(name)s regardless of its size', name='<span data-bind="text: selectedFile.path"></span>') }}
+        </button>
+    <p>
+
+    <div data-bind="ifnot: ((settings.settings.plugins.gcodeviewer.alwaysCompress()) ||
+	((settings.settings.plugins.gcodeviewer.compressionSizeThreshold() > 0) &&
+        (settings.settings.plugins.gcodeviewer.compressionSizeThreshold() <= selectedFile.size())))">
+        {% trans %}<p>
+            You may want to turn on in-memory compression to keep the memory usage of this page to a reasonable
+            level. You can change the main settings for compression in the plugin settings or you can force
+            compression for just this file here. It may also help if this file would normally make your browser
+            unresponsive or crash. Loading the file will become considerably slower.
+        </p>{% endtrans %}
+
+        <p>
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: reader_forceCompression">{{ _('Force compression') }}
+            </label>
+        <p>
+    </div>
 </div>

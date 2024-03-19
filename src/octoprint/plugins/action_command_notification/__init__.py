@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2020 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
+import re
 import time
 
 import flask
@@ -24,6 +22,7 @@ class ActionCommandNotificationPlugin(
 ):
     def __init__(self):
         self._notifications = []
+        self._filter = None
 
     # Additional permissions hook
 
@@ -63,7 +62,24 @@ class ActionCommandNotificationPlugin(
     # ~ SettingsPlugin
 
     def get_settings_defaults(self):
-        return {"enable": True, "enable_popups": False}
+        return {"enable": True, "enable_popups": False, "filter": ""}
+
+    def on_settings_initialized(self):
+        self._set_filter_pattern()
+
+    def on_settings_save(self, data):
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        self._set_filter_pattern()
+
+    def _set_filter_pattern(self):
+        pattern = self._settings.get(["filter"])
+        if pattern:
+            try:
+                self._filter = re.compile(pattern)
+            except re.error:
+                self._logger.exception("Invalid regular expression in filter, ignoring")
+        else:
+            self._filter = None
 
     # ~ SimpleApiPlugin
 
@@ -93,12 +109,12 @@ class ActionCommandNotificationPlugin(
             {
                 "type": "settings",
                 "name": gettext("Printer Notifications"),
-                "custom_bindings": False,
+                "custom_bindings": True,
             },
             {
                 "type": "sidebar",
                 "name": gettext("Printer Notifications"),
-                "icon": "bell-o",
+                "icon": "far fa-bell",
                 "styles_wrapper": ["display: none"],
                 "template_header": "action_command_notification_sidebar_header.jinja2",
                 "data_bind": "visible: loginState.hasPermissionKo(access.permissions.PLUGIN_ACTION_COMMAND_NOTIFICATION_SHOW)"
@@ -123,10 +139,15 @@ class ActionCommandNotificationPlugin(
             return
 
         message = parameter.strip()
+
+        if self._filter and self._filter.search(message):
+            self._logger.debug(f"Notification matches filter regex: {message}")
+            return
+
         self._notifications.append((time.time(), message))
         self._plugin_manager.send_plugin_message(self._identifier, {"message": message})
 
-        self._logger.info("Got a notification: {}".format(message))
+        self._logger.info(f"Got a notification: {message}")
 
     def _clear_notifications(self):
         self._notifications = []
@@ -144,7 +165,7 @@ __plugin_disabling_discouraged__ = gettext(
     " notifications in OctoPrint"
 )
 __plugin_license__ = "AGPLv3"
-__plugin_pythoncompat__ = ">=2.7,<4"
+__plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_implementation__ = ActionCommandNotificationPlugin()
 __plugin_hooks__ = {
     "octoprint.comm.protocol.action": __plugin_implementation__.action_command_handler,

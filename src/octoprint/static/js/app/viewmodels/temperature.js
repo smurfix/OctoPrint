@@ -5,6 +5,7 @@ $(function () {
         self.loginState = parameters[0];
         self.settingsViewModel = parameters[1];
         self.access = parameters[2];
+        self.printerState = parameters[3];
 
         self._createToolEntry = function () {
             var entry = {
@@ -116,6 +117,8 @@ $(function () {
         self._currentTemperatureDataBacklog = [];
         self._historyTemperatureDataBacklog = [];
 
+        self._graphUpdater = undefined;
+
         self._printerProfileUpdated = function () {
             var graphColors = ["red", "orange", "green", "brown", "purple"];
             var heaterOptions = {};
@@ -123,7 +126,8 @@ $(function () {
             var color;
 
             // tools
-            var currentProfileData = self.settingsViewModel.printerProfiles.currentProfileData();
+            var currentProfileData =
+                self.settingsViewModel.printerProfiles.currentProfileData();
             var numExtruders = currentProfileData
                 ? currentProfileData.extruder.count()
                 : 0;
@@ -200,6 +204,20 @@ $(function () {
                 .heatedChamber.subscribe(self._printerProfileUpdated);
         });
 
+        self.markings = [];
+
+        self.showStateMarks = ko.observable(
+            loadFromLocalStorage("temperatureGraph.showStateMarks", true)
+        );
+        self.showStateMarks.subscribe(function (newValue) {
+            saveToLocalStorage("temperatureGraph.showStateMarks", newValue);
+            self.updatePlot();
+        });
+
+        self.toggleStateMarks = function () {
+            self.showStateMarks(!self.showStateMarks());
+        };
+
         self.temperatures = [];
 
         self.plot = undefined;
@@ -207,6 +225,7 @@ $(function () {
         self.plotLegendTimeout = undefined;
 
         self.fromCurrentData = function (data) {
+            self.markings = data.markings;
             self._processStateData(data.state);
             if (!self._printerProfileInitialized) {
                 self._currentTemperatureDataBacklog.push(data);
@@ -217,6 +236,7 @@ $(function () {
         };
 
         self.fromHistoryData = function (data) {
+            self.markings = data.markings;
             self._processStateData(data.state);
             if (!self._printerProfileInitialized) {
                 self._historyTemperatureDataBacklog.push(data);
@@ -348,13 +368,24 @@ $(function () {
 
             var temperature_cutoff = self.temperature_cutoff();
             if (temperature_cutoff !== undefined) {
+                const minTime = clientTime - temperature_cutoff * 60 * 1000;
+
                 var filterOld = function (item) {
-                    return item[0] >= clientTime - temperature_cutoff * 60 * 1000;
+                    return item[0] >= minTime;
                 };
 
                 _.each(_.keys(self.heaterOptions()), function (d) {
+                    const actualLen = result[d].actual.length;
                     result[d].actual = _.filter(result[d].actual, filterOld);
+                    if (actualLen && result[d].actual.length <= actualLen) {
+                        result[d].actual.unshift([minTime, undefined]);
+                    }
+
+                    const targetLen = result[d].target.length;
                     result[d].target = _.filter(result[d].target, filterOld);
+                    if (targetLen && result[d].target.length <= targetLen) {
+                        result[d].target.unshift([minTime, undefined]);
+                    }
                 });
             }
 
@@ -421,6 +452,90 @@ $(function () {
             }
         };
 
+        self._drawMarkings = function () {
+            var graph = $("#temperature-graph");
+            if (!self.plot) {
+                return [];
+            }
+
+            $(".temperature-mark-label").remove();
+
+            if (!self.showStateMarks()) {
+                return [];
+            }
+
+            var graphWidth = self.plot.width();
+            var yAxisLabelWidth = 40;
+            var markingsLabelMargin = 0;
+            var lineWidth = 2;
+
+            var marks = self.markings.map(function (mark) {
+                var time = parseInt(mark.time * 1000);
+                var o = self.plot.pointOffset({
+                    x: time,
+                    y: self.plot.getAxes().yaxis.max
+                });
+
+                var markLabel = mark.type;
+                if (mark.label) {
+                    markLabel = gettext(mark.label);
+                }
+
+                // we create the label even if we don't show it so that we can query its
+                // background color (see #4761)
+                var label = $("<div></div>");
+                label.html(markLabel);
+                label.addClass("temperature-mark-label");
+                label.addClass("temperature-mark-type-" + mark.type);
+
+                if (o.left > yAxisLabelWidth) {
+                    graph.append(label);
+
+                    // draw markings label on the left if doesn't fit on the right
+                    if (
+                        o.left >
+                        graphWidth +
+                            yAxisLabelWidth -
+                            label.outerHeight() -
+                            markingsLabelMargin
+                    ) {
+                        label.css(
+                            "left",
+                            o.left - label.outerHeight() - markingsLabelMargin + "px"
+                        );
+                        label.css("border-radius", "5px 0 0 0");
+                    } else {
+                        label.css("left", o.left + markingsLabelMargin + "px");
+                        label.css("border-radius", "0 0 0 5px");
+                    }
+
+                    // set top position
+                    label.css("top", o.top + label.outerWidth() + "px");
+                }
+
+                return {
+                    color: label.css("background-color"),
+                    lineWidth: lineWidth,
+                    xaxis: {from: time, to: time}
+                };
+            });
+
+            return marks;
+        };
+
+        // Dummy translation requests for dynamic strings supplied by the backend
+        // noinspection BadExpressionStatementJS
+        [
+            // mark labels
+            gettext("Start"),
+            gettext("Done"),
+            gettext("Cancel"),
+            gettext("Pause"),
+            gettext("Resume"),
+            gettext("Connected"),
+            gettext("Disconnected")
+        ];
+
         self._initializePlot = function (force, plotInfo) {
             var graph = $("#temperature-graph");
             if (!graph.length) return; // no graph
@@ -435,17 +550,31 @@ $(function () {
                     min: 0,
                     max: Math.max(Math.max.apply(null, plotInfo.max) * 1.1, 310),
                     ticks: 10,
-                    tickFormatter: function (val, axis) {
+                    tickFormatter: (val, axis) => {
                         if (val === undefined || val === 0) return "";
                         return val + "°C";
                     }
                 },
                 xaxis: {
                     mode: "time",
-                    minTickSize: [2, "minute"],
-                    tickFormatter: function (val, axis) {
-                        if (val === undefined || val === 0) return ""; // we don't want to display the minutes since the epoch if not connected yet ;)
+                    ticks: (axis) => {
+                        if (
+                            axis.max === undefined ||
+                            axis.min === undefined ||
+                            axis.datamax === axis.datamin
+                        )
+                            return [];
 
+                        const tickSize = 5 * 60 * 1000; // 5 minutes
+                        const ticks = [];
+                        let val = axis.max;
+                        while (val > axis.min) {
+                            ticks.push(val);
+                            val -= tickSize;
+                        }
+                        return ticks;
+                    },
+                    tickFormatter: (val, axis) => {
                         // current time in milliseconds in UTC
                         var timestampUtc = Date.now();
 
@@ -454,12 +583,11 @@ $(function () {
 
                         // convert to minutes
                         var diffInMins = Math.round(diff / (60 * 1000));
-                        if (diffInMins === 0) {
-                            // don't write anything for "just now"
-                            return "";
-                        } else if (diffInMins < 0) {
+                        if (diffInMins < 0) {
                             // we can't look into the future
                             return "";
+                        } else if (diffInMins === 0) {
+                            return gettext("now");
                         } else {
                             return "- " + diffInMins + " " + gettext("min");
                         }
@@ -474,7 +602,11 @@ $(function () {
 
             if (!OctoPrint.coreui.browser.mobile) {
                 options["crosshair"] = {mode: "x"};
-                options["grid"] = {hoverable: true, autoHighlight: false};
+                options["grid"] = {
+                    hoverable: true,
+                    autoHighlight: false,
+                    markings: self._drawMarkings
+                };
             }
 
             self.plot = $.plot(graph, plotInfo.data, options);
@@ -537,7 +669,8 @@ $(function () {
                         ": " +
                         targetTemp,
                     color: pusher.color(heaterOptions[type].color).tint(0.5).html(),
-                    data: targets.length ? targets : [[now, undefined]]
+                    data: targets.length ? targets : [[now, undefined]],
+                    dashes: {show: true}
                 });
 
                 maxTemps.push(self.getMaxTemp(actuals, targets));
@@ -985,6 +1118,24 @@ $(function () {
             }
 
             self.changeOffsetDialog = $("#change_offset_dialog");
+
+            self._graphUpdater = setInterval(() => {
+                if (self.printerState.isOperational()) return;
+
+                const now = Date.now() / 1000;
+                const entry = {};
+                _.each(_.keys(self.heaterOptions()), (type) => {
+                    entry[type] = {actual: undefined, target: undefined};
+                });
+                entry["time"] = now;
+
+                self.temperatures = self._processTemperatureData(
+                    now,
+                    [entry],
+                    self.temperatures
+                );
+                self.updatePlot();
+            }, 1000);
         };
 
         self.onStartupComplete = function () {
@@ -992,14 +1143,22 @@ $(function () {
             self._printerProfileUpdated();
         };
 
-        self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
-            self.initOrUpdate();
-        };
+        self.onUserPermissionsChanged =
+            self.onUserLoggedIn =
+            self.onUserLoggedOut =
+                function () {
+                    self.initOrUpdate();
+                };
     }
 
     OCTOPRINT_VIEWMODELS.push({
         construct: TemperatureViewModel,
-        dependencies: ["loginStateViewModel", "settingsViewModel", "accessViewModel"],
+        dependencies: [
+            "loginStateViewModel",
+            "settingsViewModel",
+            "accessViewModel",
+            "printerStateViewModel"
+        ],
         elements: ["#temp", "#temp_link", "#change_offset_dialog"]
     });
 });

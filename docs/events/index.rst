@@ -32,12 +32,15 @@ Example
        command: python ~/growl.py -t mygrowlserver -d "Lost connection to printer" -a OctoPrint -i http://raspi/Octoprint_logo.png
        type: system
        enabled: false
+       name: Disconnected
      - event: PrintStarted
        command: python ~/growl.py -t mygrowlserver -d "Starting {file}" -a OctoPrint -i http://raspi/Octoprint_logo.png
        type: system
+       name: Print Started
      - event: PrintDone
        command: python ~/growl.py -t mygrowlserver -d "Completed {file}" -a OctoPrint -i http://raspi/Octoprint_logo.png
        type: system
+       name: Print Done
      - event:
        - PrintStarted
        - PrintFailed
@@ -45,12 +48,14 @@ Example
        - PrintCancelled
        command: python ~/growl.py -t mygrowlserver -d "Event {__eventname} ({name})" -a OctoPrint -i http://raspi/Octoprint_logo.png
        type: system
+       name: Multiple Events
      - event: Connected
        command:
        - M115
        - M117 printer connected!
        - G28
        type: gcode
+       name: Connected
 
 .. _sec-events-placeholders:
 
@@ -196,6 +201,16 @@ Error
    Payload:
 
      * ``error``: the error string
+     * ``reason``: the reason for the error, one of ``firmware``, ``resend``, ``resend_loop``, ``timeout``,
+       ``connection``, ``start_print``, ``autodetect`` or unset.
+     * ``consequence``: What was done as a consequence of that error. ``emergency`` if an ``M112`` emergency stop was sent
+       and the connection to the printer closed, ``disconnect`` if the connection was just closed, ``cancel`` if the ongoing
+       print job was cancelled. Might also be missing if nothing happened as a consequence.
+
+   In case of errors with reason ``firmware``, the following additional fields might be present in the payload:
+
+     * ``faq``: a link to the FAQ entry for the error
+     * ``logs``: the last lines from the communication log
 
 PrinterStateChanged
    The state of the printer changed.
@@ -220,8 +235,10 @@ Upload
      * ``name``: the file's name
      * ``path``: the file's path within its storage location
      * ``target``: the target storage location to which the file was uploaded, either ``local`` or ``sdcard``
-     * ``select``: whether the file will immediately be selected, as requested on the API by the corresponding parameter
-     * ``print``: whether the file will immediately start printing, as requested on the API by the corresponding parameter
+     * ``select``: whether an immediate selection of the file was requested on the API by the corresponding parameter
+     * ``print``: whether an immediate print start of the file was requested on the API by the corresponding parameter
+     * ``effective_select``: whether the file will actually be selected (``select`` request got granted)
+     * ``effective_print``: whether the file will actually start printing (``print`` request got granted)
      * ``userdata``: optional ``userdata`` if provided on the API, will only be present if supplied in the upload request
 
    .. deprecated:: 1.3.0
@@ -239,6 +256,7 @@ FileAdded
      * ``name``: the file's name
      * ``type``: the file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
        ``["model", "stl"]``
+     * ``operation``: the operation that triggered the event, either ``add``, ``copy`` or ``move``.
 
    .. note::
 
@@ -256,12 +274,33 @@ FileRemoved
      * ``name``: the file's name
      * ``type``: the file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
        ``["model", "stl"]``
+     * ``operation``: the operation that triggered the event, either ``remove`` or ``move``
 
    .. note::
 
       A moved file first triggers ``FileRemoved`` for its original path and then ``FileAdded`` for the new one.
 
   .. versionadded:: 1.3.3
+
+FileMoved
+   A file has been moved from one location to an other location.
+
+   Payload:
+     * ``storage``: the storage's identifier
+     * ``source_path``: the source file's path within its storage location
+     * ``source_name``: the source file's name
+     * ``source_type``: the source file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
+       ``["model", "stl"]``
+     * ``destination_path``: the source file's path within its storage location
+     * ``destination_name``: the source file's name
+     * ``destination_type``: the source file's type, a list of the path within the type hierarchy, e.g. ``["machinecode", "gcode"]`` or
+       ``["model", "stl"]``
+
+   .. note::
+
+      A moved file still triggers first a ``FileRemoved`` for its original path and then ``FileAdded`` event for the new one. After that a ```UpdatedFiles``` event is also fired.
+
+  .. versionadded:: 1.8.0
 
 FolderAdded
    A folder has been added to a storage.
@@ -291,6 +330,22 @@ FolderRemoved
       A moved folder first triggers ``FolderRemoved`` for its original path and then ``FolderAdded`` for the new one.
 
   .. versionadded:: 1.3.3
+
+FolderMoved
+   A folder has been moved from one location to an other location.
+
+   Payload:
+     * ``storage``: the storage's identifier
+     * ``source_path``: the source folder's path within its storage location
+     * ``source_name``: the source folder's name
+     * ``destination_path``: the source folder's path within its storage location
+     * ``destination_name``: the source folder's name
+
+   .. note::
+
+      A moved folder still triggers first a ``FolderRemoved`` for its original path and then ``FolderAdded`` event for the new one. After that a ```UpdatedFiles``` event is also fired.
+
+  .. versionadded:: 1.8.0
 
 UpdatedFiles
    A file list was modified.
@@ -481,6 +536,8 @@ PrintCancelled
      * ``position.f``: last feedrate for move commands **sent through OctoPrint** (note that if you modified the
        feedrate outside of OctoPrint, e.g. through the printer controller, or if you are printing from SD, this will
        NOT be accurate)
+     * ``fileposition``: position in the file in bytes at the time of cancellation
+     * ``progress``: print progress as a percentage at the time of cancellation
 
    .. deprecated:: 1.3.0
 
@@ -512,6 +569,8 @@ PrintPaused
      * ``position.f``: last feedrate for move commands **sent through OctoPrint** (note that if you modified the
        feedrate outside of OctoPrint, e.g. through the printer controller, or if you are printing from SD, this will
        NOT be accurate)
+     * ``fileposition``: position in the file in bytes at the time of pausing
+     * ``progress``: print progress as a percentage at the time of pausing
 
    .. deprecated:: 1.3.0
 
@@ -566,6 +625,21 @@ GcodeScript${ScriptName}Finished
      * ``time``: the time needed for the print, in seconds (float)
 
    .. versionadded:: 1.6.0
+
+ChartMarked
+   A time-based marking has been made on the UI's temperature chart.
+
+   Payload:
+
+     * ``type``: The marking's ID. Built-in types are ``print``, ``done``, ``cancel``, ``pause``, and ``resume``.
+       Plugins may set arbitrary types, which should be prefixed, e.g. ``pluginname_eventtype``. In the UI, the type
+       ID is used to stylize the marking label.
+     * ``label``: The human-readable short label of the marking, ideally one short word. Optional but recommended; if
+       not specified, the UI will display the ``type``. The label may be localized in the UI.
+     * ``time``: The epoch time of marking. Defaults to the event fire time if not specified. Plugins may set a time
+       in the past if it makes sense for the event.
+
+   .. versionadded:: 1.9.0
 
 .. _sec-events-available_events-gcode_processing:
 
@@ -832,4 +906,3 @@ PrinterProfileModified
      * ``identifier``: the identifier of the modified printer profile
 
    .. versionadded:: 1.3.12
-

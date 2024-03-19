@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2015 The OctoPrint Project - Released under terms of the AGPLv3 License"
 
@@ -10,10 +7,10 @@ import logging
 import pprint
 
 import click
-import yaml
 
-from octoprint import FatalStartupError, init_settings
+from octoprint import FatalStartupError, init_pluginsystem, init_settings
 from octoprint.cli import get_ctx_obj_option, standard_options
+from octoprint.util import yaml
 
 click.disable_unicode_literals_warning = True
 
@@ -44,17 +41,23 @@ def _set_helper(settings, path, value, data_type=None):
     settings.save()
 
 
+def _init_pluginsettings(ctx):
+    try:
+        ctx.obj.plugin_manager = init_pluginsystem(
+            ctx.obj.settings, safe_mode=get_ctx_obj_option(ctx, "safe_mode", False)
+        )
+    except FatalStartupError as e:
+        click.echo(str(e), err=True)
+        click.echo("There was a fatal error initializing the plugin manager.", err=True)
+        ctx.exit(-1)
+
+
 # ~~ "octoprint config" commands
 
 
 @click.group()
-def config_commands():
-    pass
-
-
-@config_commands.group(name="config")
 @click.pass_context
-def config(ctx):
+def cli(ctx):
     """Basic config manipulation."""
     logging.basicConfig(
         level=logging.DEBUG
@@ -73,7 +76,7 @@ def config(ctx):
         ctx.exit(-1)
 
 
-@config.command(name="set")
+@cli.command(name="set")
 @standard_options(hidden=True)
 @click.argument("path", type=click.STRING)
 @click.argument("value", type=click.STRING)
@@ -102,7 +105,7 @@ def set_command(ctx, path, value, as_bool, as_float, as_int, as_json):
     _set_helper(ctx.obj.settings, path, value, data_type=data_type)
 
 
-@config.command(name="remove")
+@cli.command(name="remove")
 @standard_options(hidden=True)
 @click.argument("path", type=click.STRING)
 @click.pass_context
@@ -111,7 +114,7 @@ def remove_command(ctx, path):
     _set_helper(ctx.obj.settings, path, None)
 
 
-@config.command(name="append_value")
+@cli.command(name="append_value")
 @standard_options(hidden=True)
 @click.argument("path", type=click.STRING)
 @click.argument("value", type=click.STRING)
@@ -120,6 +123,8 @@ def remove_command(ctx, path):
 def append_value_command(ctx, path, value, as_json=False):
     """Appends value to list behind config path."""
     path = _to_settings_path(path)
+    if len(path) == 0 or path[0] == "plugins":
+        _init_pluginsettings(ctx)
 
     if as_json:
         try:
@@ -139,7 +144,7 @@ def append_value_command(ctx, path, value, as_json=False):
     _set_helper(ctx.obj.settings, path, current)
 
 
-@config.command(name="insert_value")
+@cli.command(name="insert_value")
 @standard_options(hidden=True)
 @click.argument("path", type=click.STRING)
 @click.argument("index", type=click.INT)
@@ -149,6 +154,8 @@ def append_value_command(ctx, path, value, as_json=False):
 def insert_value_command(ctx, path, index, value, as_json=False):
     """Inserts value at index of list behind config key."""
     path = _to_settings_path(path)
+    if len(path) == 0 or path[0] == "plugins":
+        _init_pluginsettings(ctx)
 
     if as_json:
         try:
@@ -168,7 +175,7 @@ def insert_value_command(ctx, path, index, value, as_json=False):
     _set_helper(ctx.obj.settings, path, current)
 
 
-@config.command(name="remove_value")
+@cli.command(name="remove_value")
 @standard_options(hidden=True)
 @click.argument("path", type=click.STRING)
 @click.argument("value", type=click.STRING)
@@ -177,6 +184,8 @@ def insert_value_command(ctx, path, index, value, as_json=False):
 def remove_value_command(ctx, path, value, as_json=False):
     """Removes value from list at config path."""
     path = _to_settings_path(path)
+    if len(path) == 0 or path[0] == "plugins":
+        _init_pluginsettings(ctx)
 
     if as_json:
         try:
@@ -200,7 +209,7 @@ def remove_value_command(ctx, path, value, as_json=False):
     _set_helper(ctx.obj.settings, path, current)
 
 
-@config.command(name="get")
+@cli.command(name="get")
 @click.argument("path", type=click.STRING)
 @click.option("--json", "as_json", is_flag=True, help="Output value formatted as JSON")
 @click.option("--yaml", "as_yaml", is_flag=True, help="Output value formatted as YAML")
@@ -212,14 +221,14 @@ def remove_value_command(ctx, path, value, as_json=False):
 def get_command(ctx, path, as_json=False, as_yaml=False, as_raw=False):
     """Retrieves value from config path."""
     path = _to_settings_path(path)
+    if len(path) == 0 or path[0] == "plugins":
+        _init_pluginsettings(ctx)
     value = ctx.obj.settings.get(path, merged=True)
 
     if as_json:
         output = json.dumps(value)
     elif as_yaml:
-        output = yaml.safe_dump(
-            value, default_flow_style=False, indent=2, allow_unicode=True
-        )
+        output = yaml.dump(value, pretty=True)
     elif as_raw:
         output = value
     else:
@@ -228,7 +237,7 @@ def get_command(ctx, path, as_json=False, as_yaml=False, as_raw=False):
     click.echo(output)
 
 
-@config.command(name="effective")
+@cli.command(name="effective")
 @click.option("--json", "as_json", is_flag=True, help="Output value formatted as JSON")
 @click.option("--yaml", "as_yaml", is_flag=True, help="Output value formatted as YAML")
 @click.option(
@@ -238,14 +247,13 @@ def get_command(ctx, path, as_json=False, as_yaml=False, as_raw=False):
 @click.pass_context
 def effective_command(ctx, as_json=False, as_yaml=False, as_raw=False):
     """Retrieves the full effective config."""
+    _init_pluginsettings(ctx)
     value = ctx.obj.settings.effective
 
     if as_json:
         output = json.dumps(value)
     elif as_yaml:
-        output = yaml.safe_dump(
-            value, default_flow_style=False, indent=2, allow_unicode=True
-        )
+        output = yaml.dump(value, pretty=True)
     elif as_raw:
         output = value
     else:

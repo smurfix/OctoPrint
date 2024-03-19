@@ -235,7 +235,7 @@ will now fail with an error. You'll need to explicitly make the import a relativ
 
    from . import my_sub_package
 
-To make your code behave the same in that regard unter both Python 2 and Python 3, you should add the corresponding
+To make your code behave the same in that regard in both Python 2 and Python 3, you should add the corresponding
 future import:
 
 .. code-block:: python
@@ -336,7 +336,7 @@ As a summary, follow this checklist to migrate your plugin to be compatible to b
        # -*- coding: utf-8 -*-
        from __future__ import absolute_import, division, print_function, unicode_literals
 
-  * Thorougly test your plugin under Python 3. Pay special attention to any kind of string handling issues, integer
+  * Thoroughly test your plugin under Python 3. Pay special attention to any kind of string handling issues, integer
     division, relative imports from your plugin package and how the results of ``map``, ``filter`` and ``zip`` are
     used in your code, as those have proven to be the biggest issues during past migrations.
   * Once everything works under both Python versions and you've prepared a new release of your plugin (don't forget to
@@ -373,5 +373,3 @@ Further reading
    `Migrating plugins to Python 2 & 3 compatibility - experiences? <https://community.octoprint.org/t/migrating-plugins-to-python-2-3-compatibility-experiences/16294?u=foosel>`__
       Forum topic collecting experiences by plugin developers in migrating their plugins to achieve Python 2 & 3
       compatibility.
-
-

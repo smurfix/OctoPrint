@@ -11,21 +11,35 @@ jobs:
     name: 🔨 Build distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: 🏗 Set up Python 3.7
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: 3.7
       - name: 🏗 Install build dependencies
         run: |
           python -m pip install wheel --user
-      - name: 🔨 Build a binary wheel and a source tarball
+      - name: 🔨 Build a binary wheel, an sdist tarball and a source tarball
         run: |
           python setup.py sdist bdist_wheel
+
+          # rename sdist .tar.gz to .sdist.tar.gz
+          sdist=$(ls dist/OctoPrint-*.tar.gz)
+          mv "$sdist" "${sdist/.tar.gz/.sdist.tar.gz}"
+
+          # create source tarball
+          prefix=$(basename ${sdist%.tar.gz})
+          git archive --prefix $prefix/ HEAD --output dist/$prefix.source.tar.gz
+      - name: 🔨 Create sha512sums of dist files
+        run: |
+          cd dist
+          sha512sum OctoPrint-*-py2.py3-none-any.whl > sha512sums.txt
+          sha512sum OctoPrint-*.sdist.tar.gz >> sha512sums.txt
+          sha512sum OctoPrint-*.source.tar.gz >> sha512sums.txt
       - name: ⬆ Upload build result
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist
@@ -34,9 +48,9 @@ jobs:
     name: 🧹 Pre-commit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: 🏗 Set up Python 3.7
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: 3.7
       - name: 🏗 Set up dev dependencies
@@ -50,12 +64,12 @@ jobs:
     name: 🧪 Unit tests
     strategy:
       matrix:
-        python: ["2.7", "3.7", "3.8", "3.9"]
+        python: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: 🏗 Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: 🏗 Set up test dependencies
@@ -65,22 +79,36 @@ jobs:
         run: |
           pytest
 
+  test-js-unit:
+    name: 🧪 JavaScript unit tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 🏗 Set up test dependencies
+        run: |
+          npm -g install node-qunit-puppeteer@2.1.2
+      - name: 🚀 Run helpers.js test suite
+        run: |
+          node-qunit-puppeteer tests/static/js/test-helpers.html
+          node-qunit-puppeteer tests/static/js/test-client-base.html
+
   test-install:
     name: 🧪 Installation tests
     needs: build
     strategy:
       matrix:
-        python: ["2.7", "3.7", "3.8", "3.9"]
+        python: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
         installable: ["wheel", "sdist"]
     runs-on: ubuntu-latest
     steps:
       - name: ⬇ Download build result
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
       - name: 🏗 Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: 🚀 Install wheel
@@ -90,26 +118,31 @@ jobs:
       - name: 🚀 Install source tarball
         if: matrix.installable == 'sdist'
         run: |
-          pip install dist/OctoPrint-*.tar.gz
+          pip install dist/OctoPrint-*.sdist.tar.gz
 
   test-e2e:
     name: 🧪 E2E tests
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.7", "3.12"]
     steps:
       - name: ⬇ Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: ⬇ Download build result
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - name: 🏗 Set up Python 3.7
-        uses: actions/setup-python@v1
+
+      - name: 🏗 Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.7
-      - name: 🚀 Install wheel
+          python-version: ${{ matrix.python }}
+
+      - name: 🏗 Install OctoPrint build
         run: |
           pip install dist/OctoPrint-*-py2.py3-none-any.whl
 
@@ -118,68 +151,142 @@ jobs:
           mkdir e2econfig
           cp -r .github/fixtures/with_acl/* e2econfig
 
-      - name: 🚀 Run Cypress
-        uses: cypress-io/github-action@v2
-        with:
-          working-directory: tests/cypress
-          browser: chrome
-          start: "octoprint -b ${{ github.workspace }}/e2econfig serve --host 127.0.0.1 --port 5000"
-          wait-on: "http://127.0.0.1:5000/online.txt"
+      - name: 🏗 Prepare Playwright env
+        working-directory: ./tests/playwright
+        run: |
+          npm ci
+          PLAYWRIGHT_VERSION=$(npm ls --json @playwright/test | jq --raw-output '.dependencies["@playwright/test"].version')
+          echo "PLAYWRIGHT_VERSION=$PLAYWRIGHT_VERSION" >> $GITHUB_ENV
 
-      - name: ⬆ Upload screenshots
-        uses: actions/upload-artifact@v1
-        if: failure()
+      - name: 🧰 Cache Playwright browser binaries
+        uses: actions/cache@v4
+        id: playwright-cache
         with:
-          name: cypress-screenshots
-          path: tests/cypress/screenshots
-      - name: ⬆ Upload videos
-        uses: actions/upload-artifact@v1
+          path: "~/.cache/ms-playwright"
+          key: "${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}"
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: 🏗 Install Playwright browser binaries & OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: ./tests/playwright
+        run: |
+          npx playwright install --with-deps
+
+      - name: 🏗 Install Playwright OS dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: ./tests/playwright
+        run: |
+          npx playwright install-deps
+
+      - name: 🎭 Run Playwright
+        working-directory: ./tests/playwright
+        run: |
+          npx playwright test
+        env:
+          OCTOPRINT_SERVER_BASE: ${{ github.workspace }}/e2econfig
+
+      - name: 🔎 Check octoprint.log for errors
+        run: |
+          log=${{ github.workspace }}/e2econfig/logs/octoprint.log
+          if grep "\- ERROR \-" $log; then
+            echo "::error::Errors were logged to octoprint.log"
+            grep -Pazo '(?m)^\N+\- ERROR \-\N*\n(^\N*?\n)*?(?=\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \- )' $log
+            exit 1
+          fi
+
+      - name: ⬆ Upload Playwright report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cypress-videos
-          path: tests/cypress/videos
+          name: playwright-report-py${{ matrix.python }}
+          path: tests/playwright/playwright-report
 
-  publish-on-testpypi:
-    name: 📦 Publish on TestPyPI
-    if: github.event_name == 'release'
+      - name: ⬆ Upload OctoPrint logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: octoprint-logs-py${{ matrix.python }}
+          path: ${{ github.workspace }}/e2econfig/logs
+
+  publish-on-release:
+    name: 📦 Publish build & source on GitHub release
+    if: github.event_name == 'release' && github.repository == 'OctoPrint/OctoPrint'
     needs:
       - pre-commit
       - test-unit
+      - test-js-unit
       - test-install
       - test-e2e
     runs-on: ubuntu-latest
     steps:
       - name: ⬇ Download build result
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - name: 📦 Publish to index
-        uses: pypa/gh-action-pypi-publish@master
+
+      - name: ⬆ Upload to release
+        run: |
+          UPLOAD_URL="https://uploads.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}/assets"
+
+          for file in dist/*; do
+            [ -e "$file" ] || exit 1
+            echo "Uploading $file..."
+            response=$(curl -s -XPOST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: $(file -b --mime-type $file)" \
+              --data-binary @$file \
+              "$UPLOAD_URL?name=$(basename $file)")
+            echo "$response" | jq -e '.errors' >/dev/null && echo "Error uploading $file to release: $response" && exit 1 || true
+          done
+
+  publish-on-testpypi:
+    name: 📦 Publish on TestPyPI
+    if: github.event_name == 'release' && github.repository == 'OctoPrint/OctoPrint'
+    needs:
+      - publish-on-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇ Download build result
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: 🧹 Remove some stuff that won't make it through twine check
+        run: |
+          rm dist/OctoPrint-*.source.tar.gz
+          rm dist/sha512sums.txt
+      - name: ⬆ Upload to index
+        uses: pypa/gh-action-pypi-publish@release/v1
         continue-on-error: true
         with:
           password: ${{ secrets.testpypi_password }}
-          repository_url: https://test.pypi.org/legacy/
+          repository-url: https://test.pypi.org/legacy/
 
   publish-on-pypi:
     name: 📦 Publish tagged releases to PyPI
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && github.repository == 'OctoPrint/OctoPrint'
     needs: publish-on-testpypi
     runs-on: ubuntu-latest
     steps:
       - name: ⬇ Download build result
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - name: 📦 Publish to index
-        uses: pypa/gh-action-pypi-publish@master
+      - name: 🧹 Remove some stuff that won't make it through twine check
+        run: |
+          rm dist/OctoPrint-*.source.tar.gz
+          rm dist/sha512sums.txt
+      - name: ⬆ Publish to index
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.pypi_password }}
 
   notify-custopizer-build:
     name: 📧 Notify OctoPi-UpToDate
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && github.repository == 'OctoPrint/OctoPrint'
     needs: publish-on-pypi
     runs-on: ubuntu-latest
     steps:
@@ -188,7 +295,7 @@ jobs:
           OCTOPRINT_VERSION=$(echo $GITHUB_REF | cut -d/ -f3)
           echo "OCTOPRINT_VERSION=$OCTOPRINT_VERSION" >> $GITHUB_ENV
       - name: 🚀 Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.REPODISPATCH_TOKEN }}
           repository: OctoPrint/OctoPi-UpToDate

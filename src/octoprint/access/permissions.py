@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Marc Hannappel <salandora@gmail.com>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2017 The OctoPrint Project - Released under terms of the AGPLv3 License"
@@ -10,10 +7,6 @@ from functools import wraps
 
 from flask import abort, g
 from flask_babel import gettext
-from future.utils import with_metaclass
-
-# noinspection PyCompatibility
-from past.builtins import basestring
 
 from octoprint.access import ADMIN_GROUP, READONLY_GROUP, USER_GROUP
 from octoprint.vendor.flask_principal import Need, Permission, PermissionDenied, RoleNeed
@@ -32,12 +25,11 @@ class OctoPrintPermission(Permission):
     def convert_to_needs(cls, needs):
         result = []
         for need in needs:
-            # noinspection PyCompatibility
             if isinstance(need, Need):
                 result.append(need)
             elif isinstance(need, Permission):
                 result += need.needs
-            elif isinstance(need, basestring):
+            elif isinstance(need, str):
                 result.append(RoleNeed(need))
         return result
 
@@ -149,7 +141,7 @@ class PluginOctoPrintPermission(OctoPrintPermission):
         return result
 
 
-class PluginIdentityContext(object):
+class PluginIdentityContext:
     """Identity context for not initialized Permissions
 
     Needed to support @Permissions.PLUGIN_X_Y.require()
@@ -193,7 +185,7 @@ class PluginIdentityContext(object):
         # check the permission here
         if not permission.can():
             if self.http_exception:
-                abort(self.http_exception, permission)
+                abort(self.http_exception)
             raise PermissionDenied(permission)
 
     def __exit__(self, *args):
@@ -254,7 +246,7 @@ class PermissionsMetaClass(type):
             key = p.key
         elif isinstance(p, dict):
             key = p.get("key")
-        elif isinstance(p, basestring):
+        elif isinstance(p, str):
             key = p
 
         if key is None:
@@ -275,8 +267,7 @@ class PermissionsMetaClass(type):
         return None
 
 
-class Permissions(with_metaclass(PermissionsMetaClass)):
-
+class Permissions(metaclass=PermissionsMetaClass):
     # Special permission
     ADMIN = OctoPrintPermission(
         "Admin",
@@ -423,20 +414,20 @@ class Permissions(with_metaclass(PermissionsMetaClass)):
     )
     TIMELAPSE_DELETE = OctoPrintPermission(
         "Timelapse Delete",
-        gettext("Allows to delete timelapse videos and unrendered timelapses"),
+        gettext("Allows to delete timelapse videos"),
         RoleNeed("timelapse_delete"),
+        default_groups=[USER_GROUP],
+    )
+    TIMELAPSE_MANAGE_UNRENDERED = OctoPrintPermission(
+        "Timelapse Manage Unrendered",
+        gettext("Allows to list, delete and render unrendered timelapses"),
+        RoleNeed("timelapse_manage_unrendered"),
         default_groups=[USER_GROUP],
     )
     TIMELAPSE_ADMIN = OctoPrintPermission(
         "Timelapse Admin",
-        gettext(
-            "Allows to change the timelapse settings and delete or "
-            'render unrendered timelapses. Includes the "Timelapse List",'
-            '"Timelapse Delete" and "Timelapse Download" permissions'
-        ),
+        gettext("Allows to change the timelapse settings."),
         RoleNeed("timelapse_admin"),
-        TIMELAPSE_LIST,
-        TIMELAPSE_DOWNLOAD,
         default_groups=[USER_GROUP],
     )
 

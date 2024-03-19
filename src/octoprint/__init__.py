@@ -1,26 +1,23 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
 
-import io
 import logging as log
 import os
 import sys
 
-from ._version import get_versions
+from ._version import get_data as get_version_data
 
 # ~~ version
 
 
-versions = get_versions()
+version_data = get_version_data()
 
-__version__ = versions["version"]
-__branch__ = versions.get("branch", None)
+__version__ = version_data["version"]
+__branch__ = version_data["branch"]
 __display_version__ = __version__
-__revision__ = versions.get("full-revisionid", versions.get("full", None))
+__revision__ = version_data["revision"]
 
-del versions
-del get_versions
+del version_data
+del get_version_data
 
 # figure out current umask - sadly only doable by setting a new one and resetting it, no query method
 UMASK = os.umask(0)
@@ -31,30 +28,7 @@ urllib3_ssl = True
    a sound SSL environment or not."""
 
 version_info = sys.version_info
-if version_info.major == 2 and version_info.minor <= 7 and version_info.micro < 9:
-    try:
-        # make sure our requests version of urllib3 is properly patched (if possible)
-        import requests.packages.urllib3.contrib.pyopenssl
-
-        requests.packages.urllib3.contrib.pyopenssl.inject_into_urllib3()
-    except ImportError:
-        urllib3_ssl = False
-
-    try:
-        import urllib3
-
-        # only proceed if urllib3 is even installed on its own
-        try:
-            # urllib3 is there, let's patch that too
-            import urllib3.contrib.pyopenssl
-
-            urllib3.contrib.pyopenssl.inject_into_urllib3()
-        except ImportError:
-            urllib3_ssl = False
-    except ImportError:
-        pass
-
-elif version_info.major == 3 and version_info.minor >= 8 and sys.platform == "win32":
+if version_info.major == 3 and version_info.minor >= 8 and sys.platform == "win32":
     # Python 3.8 makes proactor event loop the default on Windows, Tornado doesn't like that
     #
     # see https://github.com/tornadoweb/tornado/issues/2608
@@ -75,7 +49,7 @@ class FatalStartupError(Exception):
     def __str__(self):
         result = Exception.__str__(self)
         if self.cause:
-            return "{}: {}".format(result, str(self.cause))
+            return f"{result}: {str(self.cause)}"
         else:
             return result
 
@@ -94,6 +68,7 @@ def init_platform(
     verbosity=0,
     uncaught_logger=None,
     uncaught_handler=None,
+    disable_color=True,
     safe_mode=False,
     ignore_blacklist=False,
     after_preinit_logging=None,
@@ -135,6 +110,7 @@ def init_platform(
             verbosity=verbosity,
             uncaught_logger=uncaught_logger,
             uncaught_handler=uncaught_handler,
+            disable_color=disable_color,
         )
     except Exception as ex:
         raise FatalStartupError("Could not initialize logging", cause=ex)
@@ -148,7 +124,7 @@ def init_platform(
     )
     settings_incomplete_startup_safemode = (
         "incomplete_startup"
-        if settings.getBoolean(["server", "incompleteStartup"])
+        if os.path.exists(os.path.join(settings._basedir, ".incomplete_startup"))
         and not settings.getBoolean(["server", "ignoreIncompleteStartup"])
         else None
     )
@@ -278,6 +254,7 @@ def init_logging(
     verbosity=0,
     uncaught_logger=None,
     uncaught_handler=None,
+    disable_color=True,
 ):
     """Sets up logging."""
 
@@ -288,6 +265,7 @@ def init_logging(
     # default logging configuration
     if default_config is None:
         simple_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        date_format = "%Y-%m-%d %H:%M:%S"
         default_config = {
             "version": 1,
             "formatters": {
@@ -298,13 +276,19 @@ def init_logging(
                     "reset": True,
                     "log_colors": {
                         "DEBUG": "cyan",
-                        "INFO": "white",
                         "WARNING": "yellow",
                         "ERROR": "red",
                         "CRITICAL": "bold_red",
                     },
                 },
                 "serial": {"format": "%(asctime)s - %(message)s"},
+                "tornado": {
+                    "()": "tornado.log.LogFormatter",
+                    "color": False,
+                    "format": simple_format,
+                    "datefmt": date_format,
+                },
+                "auth": {"format": "%(asctime)s - %(message)s"},
                 "timings": {"format": "%(asctime)s - %(message)s"},
                 "timingscsv": {"format": "%(asctime)s;%(func)s;%(timing)f"},
             },
@@ -312,7 +296,7 @@ def init_logging(
                 "console": {
                     "class": "octoprint.logging.handlers.OctoPrintStreamHandler",
                     "level": "DEBUG",
-                    "formatter": "colored",
+                    "formatter": "simple" if disable_color else "colored",
                     "stream": "ext://sys.stdout",
                 },
                 "file": {
@@ -334,6 +318,24 @@ def init_logging(
                         settings.getBaseFolder("logs"), "serial.log"
                     ),
                     "delay": True,
+                },
+                "tornadoFile": {
+                    "class": "octoprint.logging.handlers.TornadoLogHandler",
+                    "level": "DEBUG",
+                    "formatter": "tornado",
+                    "when": "D",
+                    "backupCount": 1,
+                    "filename": os.path.join(
+                        settings.getBaseFolder("logs"), "tornado.log"
+                    ),
+                },
+                "authFile": {
+                    "class": "octoprint.logging.handlers.AuthLogHandler",
+                    "level": "DEBUG",
+                    "formatter": "auth",
+                    "when": "D",
+                    "backupCount": 1,
+                    "filename": os.path.join(settings.getBaseFolder("logs"), "auth.log"),
                 },
                 "pluginTimingsFile": {
                     "class": "octoprint.logging.handlers.PluginTimingsLogHandler",
@@ -362,12 +364,22 @@ def init_logging(
                     "handlers": ["serialFile"],
                     "propagate": False,
                 },
+                "AUTH": {
+                    "level": "INFO",
+                    "handlers": ["authFile"],
+                    "propagate": False,
+                },
                 "PLUGIN_TIMINGS": {
                     "level": "INFO",
                     "handlers": ["pluginTimingsFile", "pluginTimingsCsvFile"],
                     "propagate": False,
                 },
                 "PLUGIN_TIMINGS.octoprint.plugin": {"level": "INFO"},
+                "tornado.access": {
+                    "level": "INFO",
+                    "handlers": ["tornadoFile"],
+                    "propagate": False,
+                },
                 "octoprint": {"level": "INFO"},
                 "octoprint.util": {"level": "INFO"},
                 "octoprint.plugins": {"level": "INFO"},
@@ -391,10 +403,9 @@ def init_logging(
 
         config_from_file = {}
         if os.path.exists(logging_file) and os.path.isfile(logging_file):
-            import yaml
+            from octoprint.util import yaml
 
-            with io.open(logging_file, "rt", encoding="utf-8") as f:
-                config_from_file = yaml.safe_load(f)
+            config_from_file = yaml.load_from_file(path=logging_file)
 
         # we merge that with the default config
         if config_from_file is not None and isinstance(config_from_file, dict):
@@ -423,7 +434,7 @@ def octoprint_plugin_inject_factory(settings, components):
                 def wrapper(*args, **kwargs):
                     tags = kwargs.get("tags", set()) | {
                         "source:plugin",
-                        "plugin:{}".format(name),
+                        f"plugin:{name}",
                     }
                     kwargs["tags"] = tags
                     return f(*args, **kwargs)
@@ -433,9 +444,7 @@ def octoprint_plugin_inject_factory(settings, components):
 
             class TaggedFuncsPrinter(wrapt.ObjectProxy):
                 def __getattribute__(self, attr):
-                    __wrapped__ = super(TaggedFuncsPrinter, self).__getattribute__(
-                        "__wrapped__"
-                    )
+                    __wrapped__ = super().__getattribute__("__wrapped__")
                     if attr == "__wrapped__":
                         return __wrapped__
 
@@ -524,14 +533,50 @@ def init_settings_plugin_config_migration_and_cleanup(plugin_manager):
             )
         except Exception:
             logging.getLogger(__name__).exception(
-                "Error while trying to migrate settings for "
-                "plugin {}, ignoring it".format(implementation._identifier),
+                "Error while trying to migrate settings for " "plugin %s, ignoring it",
+                implementation._identifier,
                 extra={"plugin": implementation._identifier},
             )
 
     plugin_manager.implementation_post_inits = [
         settings_plugin_config_migration_and_cleanup
     ]
+
+
+def init_webcam_compat_overlay(settings, plugin_manager):
+    import logging
+
+    import octoprint.webcams
+
+    def set_overlay():
+        default_webcam = octoprint.webcams.get_default_webcam(
+            settings=settings, plugin_manager=plugin_manager
+        )
+        if default_webcam is None:
+            settings.remove_overlay("webcam_compat")
+            return
+
+        if not default_webcam.config or not default_webcam.config.compat:
+            settings.remove_overlay("webcam_compat")
+            return
+
+        logging.getLogger(__name__).info(
+            f"Installing webcam compat overlay for configured default webcam {default_webcam}"
+        )
+        overlay = {"webcam": default_webcam.config.compat.dict(by_alias=True)}
+        settings.add_overlay(
+            overlay,
+            key="webcam_compat",
+            at_end=True,
+            deprecated="Please use the webcam system introduced with 1.9.0, this compatibility layer will be removed in a future release.",
+            replace=True,
+        )
+
+    def callback(path, current_value, new_value):
+        set_overlay()
+
+    set_overlay()
+    settings.add_path_update_callback(["webcam", "defaultWebcam"], callback)
 
 
 def init_custom_events(plugin_manager):
@@ -550,16 +595,19 @@ def init_custom_events(plugin_manager):
             if isinstance(result, (list, tuple)):
                 for event in result:
                     constant, value = octoprint.events.Events.register_event(
-                        event, prefix="plugin_{}_".format(name)
+                        event, prefix=f"plugin_{name}_"
                     )
                     logger.debug(
-                        'Registered event {} of plugin {} as Events.{} = "{}"'.format(
-                            event, name, constant, value
-                        )
+                        'Registered event %s of plugin %s as Events. %s = "%s"',
+                        event,
+                        name,
+                        constant,
+                        value,
                     )
         except Exception:
             logger.exception(
-                "Error while retrieving custom event list from plugin {}".format(name),
+                "Error while retrieving custom event list from plugin %s",
+                name,
                 extra={"plugin": name},
             )
 
@@ -628,6 +676,7 @@ def init_pluginsystem(
     ]
     plugin_entry_points = ["octoprint.plugin"]
     plugin_disabled_list = settings.get(["plugins", "_disabled"])
+    plugin_sorting_order = settings.get(["plugins", "_sortingOrder"], merged=True)
 
     plugin_blacklist = []
     if not ignore_blacklist and settings.getBoolean(
@@ -659,6 +708,7 @@ def init_pluginsystem(
         plugin_folders=plugin_folders,
         plugin_entry_points=plugin_entry_points,
         plugin_disabled_list=plugin_disabled_list,
+        plugin_sorting_order=plugin_sorting_order,
         plugin_blacklist=plugin_blacklist,
         plugin_validators=plugin_validators,
         compatibility_ignored_list=compatibility_ignored_list,
@@ -686,7 +736,7 @@ def init_pluginsystem(
                 disabled_from_overlays[name] = (disabled_plugins, order)
 
             settings_overlays[name] = overlay
-            logger.debug("Found settings overlay on plugin {}".format(name))
+            logger.debug("Found settings overlay on plugin %s", name)
 
     def handle_plugins_loaded(
         startup=False, initialize_implementations=True, force_reload=None
@@ -697,7 +747,7 @@ def init_pluginsystem(
         from octoprint.util import sv
 
         sorted_disabled_from_overlays = sorted(
-            [(key, value[0], value[1]) for key, value in disabled_from_overlays.items()],
+            ((key, value[0], value[1]) for key, value in disabled_from_overlays.items()),
             key=lambda x: (x[2] is None, sv(x[2]), sv(x[0])),
         )
 
@@ -711,24 +761,22 @@ def init_pluginsystem(
 
                     if addon in already_processed:
                         logger.info(
-                            "Plugin {} wants to disable plugin {}, but that was already processed".format(
-                                name, addon
-                            )
+                            "Plugin %s wants to disable plugin %s, but that was already processed",
+                            name,
+                            addon,
                         )
 
                     if addon not in already_processed and addon not in disabled_list:
                         disabled_list.append(addon)
                         logger.info(
-                            "Disabling plugin {} as defined by plugin {}".format(
-                                addon, name
-                            )
+                            "Disabling plugin %s as defined by plugin %s", addon, name
                         )
                 already_processed.append(name)
 
     def handle_plugin_enabled(name, plugin):
         if name in settings_overlays:
             settings.add_overlay(settings_overlays[name])
-            logger.info("Added settings overlay from plugin {}".format(name))
+            logger.info("Added settings overlay from plugin %s", name)
 
     pm.on_plugin_loaded = handle_plugin_loaded
     pm.on_plugins_loaded = handle_plugins_loaded
@@ -742,9 +790,7 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
     import time
 
     import requests
-    import yaml
 
-    from octoprint.util import bom_aware_open
     from octoprint.util.version import is_octoprint_compatible, is_python_compatible
 
     logger = log.getLogger(__name__ + ".startup")
@@ -755,9 +801,9 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 
     def format_blacklist(entries):
         format_entry = (
-            lambda x: "{} ({})".format(x[0], x[1])
+            lambda x: f"{x[0]} ({x[1]})"
             if isinstance(x, (list, tuple)) and len(x) == 2
-            else "{} (any)".format(x)
+            else f"{x} (any)"
         )
         return ", ".join(map(format_entry, entries))
 
@@ -783,22 +829,22 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 
             if "pluginversions" in entry:
                 logger.debug(
-                    "Blacklisted plugin: {}, versions: {}".format(
-                        entry["plugin"], ", ".join(entry["pluginversions"])
-                    )
+                    "Blacklisted plugin: %s, versions: %s",
+                    entry["plugin"],
+                    ", ".join(entry["pluginversions"]),
                 )
                 for version in entry["pluginversions"]:
                     result.append((entry["plugin"], version))
             elif "versions" in entry:
                 logger.debug(
-                    "Blacklisted plugin: {}, versions: {}".format(
-                        entry["plugin"], ", ".join(entry["versions"])
-                    )
+                    "Blacklisted plugin: %s, versions: %s",
+                    entry["plugin"],
+                    ", ".join(entry["versions"]),
                 )
                 for version in entry["versions"]:
-                    result.append((entry["plugin"], "=={}".format(version)))
+                    result.append((entry["plugin"], f"=={version}"))
             else:
-                logger.debug("Blacklisted plugin: {}".format(entry["plugin"]))
+                logger.debug("Blacklisted plugin: %s", entry["plugin"])
                 result.append(entry["plugin"])
 
         return result
@@ -810,13 +856,14 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
         if os.stat(path).st_mtime + ttl < time.time():
             return None
 
-        with bom_aware_open(path, encoding="utf-8", mode="rt") as f:
-            result = yaml.safe_load(f)
+        from octoprint.util import yaml
+
+        result = yaml.load_from_file(path=path)
 
         if isinstance(result, list):
             return result
 
-    def fetch_blacklist_from_url(url, timeout=3, cache=None):
+    def fetch_blacklist_from_url(url, timeout=3.05, cache=None):
         result = []
         try:
             r = requests.get(url, timeout=timeout)
@@ -824,8 +871,9 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 
             if cache is not None:
                 try:
-                    with bom_aware_open(cache, encoding="utf-8", mode="wt") as f:
-                        yaml.safe_dump(result, f)
+                    from octoprint.util import yaml
+
+                    yaml.save_to_file(result, path=cache)
                 except Exception as e:
                     logger.info(
                         "Fetched plugin blacklist but couldn't write it to its cache file: %s",
@@ -833,9 +881,9 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
                     )
         except Exception as e:
             logger.info(
-                "Unable to fetch plugin blacklist from {}, proceeding without it: {}".format(
-                    url, e
-                )
+                "Unable to fetch plugin blacklist from %s, proceeding without it: %s",
+                url,
+                e,
             )
         return result
 
@@ -857,10 +905,9 @@ def get_plugin_blacklist(settings, connectivity_checker=None):
 
         if blacklist:
             logger.info(
-                "Blacklist processing done, "
-                "adding {} blacklisted plugin versions: {}".format(
-                    len(blacklist), format_blacklist(blacklist)
-                )
+                "Blacklist processing done, adding %s blacklisted plugin versions: %s",
+                len(blacklist),
+                format_blacklist(blacklist),
             )
         else:
             logger.info("Blacklist processing done")
@@ -955,10 +1002,6 @@ def main():
 
         # cut off stuff from the beginning
         args = args[-1 * sys_args_length :] if sys_args_length else []
-
-    from octoprint.util.fixes import patch_sarge_async_on_py2
-
-    patch_sarge_async_on_py2()
 
     from octoprint.cli import octo
 

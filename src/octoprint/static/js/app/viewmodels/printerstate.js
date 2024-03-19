@@ -48,7 +48,7 @@ $(function () {
         self.enablePrint = ko.pureComputed(function () {
             return (
                 self.isOperational() &&
-                self.isReady() &&
+                (self.isReady() || self.isPaused()) &&
                 !self.isPrinting() &&
                 !self.isCancelling() &&
                 !self.isPausing() &&
@@ -96,6 +96,9 @@ $(function () {
         self.lastPrintTime = ko.observable(undefined);
 
         self.currentHeight = ko.observable(undefined);
+
+        self.errorInfoAvailable = ko.observable(false);
+        self.errorInfo = {};
 
         self.TITLE_PRINT_BUTTON_PAUSED = gettext(
             "Restarts the print job from the beginning"
@@ -260,7 +263,7 @@ $(function () {
         self.dateString = ko.pureComputed(function () {
             var date = self.filedate();
             if (!date) {
-                return "";
+                return gettext("unknown");
             }
 
             return formatDate(date, {seconds: true});
@@ -441,11 +444,13 @@ $(function () {
                         OctoPrint.job.start();
                     };
 
-                    callViewModels(self.allViewModels, "onBeforePrintStart", function (
-                        method
-                    ) {
-                        prevented = prevented || method(callback) === false;
-                    });
+                    callViewModels(
+                        self.allViewModels,
+                        "onBeforePrintStart",
+                        function (method) {
+                            prevented = prevented || method(callback) === false;
+                        }
+                    );
 
                     if (!prevented) {
                         callback();
@@ -497,7 +502,108 @@ $(function () {
             }
         };
 
-        self.onAllBound = function (allViewModels) {
+        self.showFirmwareErrorModal = (data) => {
+            if (!data) {
+                data = self.errorInfo;
+            }
+            if (!data) return;
+
+            const modal = $("#firmwareErrorModal");
+            if (!modal.length) return;
+
+            $("#firmwareErrorModalError", modal).text(data.error);
+
+            switch (data.consequence) {
+                case "emergency": {
+                    $("#firmwareErrorModalM112", modal).show();
+                    $("#firmwareErrorModalDisconnect", modal).hide();
+                    $("#firmwareErrorModalCancel", modal).hide();
+                    break;
+                }
+                case "disconnect": {
+                    $("#firmwareErrorModalM112", modal).hide();
+                    $("#firmwareErrorModalDisconnect", modal).show();
+                    $("#firmwareErrorModalCancel", modal).hide();
+                    break;
+                }
+                case "cancel": {
+                    $("#firmwareErrorModalM112", modal).hide();
+                    $("#firmwareErrorModalDisconnect", modal).hide();
+                    $("#firmwareErrorModalCancel", modal).show();
+                    break;
+                }
+                default: {
+                    $("#firmwareErrorModalM112", modal).hide();
+                    $("#firmwareErrorModalDisconnect", modal).hide();
+                    $("#firmwareErrorModalCancel", modal).hide();
+                    break;
+                }
+            }
+
+            if (data.faq) {
+                $("#firmwareErrorModalFaq a", modal).attr(
+                    "href",
+                    "https://faq.octoprint.org/" + data.faq
+                );
+                $("#firmwareErrorModalFaq", modal).show();
+            } else {
+                $("#firmwareErrorModalFaq", modal).hide();
+            }
+
+            const logs = $("#firmwareErrorModalLogs", modal);
+            const logOutput = $("#firmwareErrorModalLogsOutput", logs);
+            if (data.logs) {
+                logOutput.empty();
+                _.each(data.logs, (line) => {
+                    logOutput.append(
+                        '<span class="line">' + _.escape(line) + "\n" + "</span>"
+                    );
+                });
+                logs.show();
+            } else {
+                logs.hide();
+            }
+
+            modal.modal("show");
+
+            logOutput.scrollTop(logOutput.prop("scrollHeight"));
+        };
+
+        self.requestErrorInfo = () => {
+            OctoPrint.printer.getErrorInfo().then((data) => {
+                if (data && data.error && data.error !== "") {
+                    self.errorInfoAvailable(true);
+                    self.errorInfo = data;
+                } else {
+                    self.errorInfoAvailable(false);
+                    self.errorInfo = {};
+                }
+            });
+        };
+
+        self.onEventError = (payload) => {
+            if (payload.reason === "firmware") {
+                self.errorInfo = payload;
+                self.errorInfoAvailable(true);
+                self.showFirmwareErrorModal();
+            }
+        };
+
+        self.onEventConnecting =
+            self.onEventPrintCancelling =
+            self.onEventPrintStarted =
+                () => {
+                    self.requestErrorInfo();
+                };
+
+        self.onUserPermissionsChanged =
+            self.onUserLoggedIn =
+            self.onUserLoggedOut =
+                () => {
+                    self.requestErrorInfo();
+                };
+
+        self.onAllBound = (allViewModels) => {
             self.allViewModels = allViewModels;
         };
     }

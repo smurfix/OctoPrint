@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from flask_babel import gettext
 
 import octoprint.events
@@ -18,8 +16,15 @@ class EventManagerPlugin(
             "subscriptions": [],
         }
         events = self._settings.global_get(["events"])
+        for event in events.get("subscriptions", []):
+            if "name" not in event:
+                event["name"] = event["command"]
+            if not isinstance(event["event"], list):
+                event["event"] = [event["event"]]
         if events:
-            my_settings["subscriptions"] = events.get("subscriptions", [])
+            my_settings["subscriptions"] = sorted(
+                events.get("subscriptions", []), key=(lambda x: x["name"])
+            )
         return my_settings
 
     def on_settings_save(self, data):
@@ -55,7 +60,7 @@ class EventManagerPlugin(
 
 
 __plugin_name__ = gettext("Event Manager")
-__plugin_pythoncompat__ = ">=2.7,<4"
+__plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_author__ = "jneilliii"
 __plugin_license__ = "AGPLv3"
 __plugin_description__ = gettext(

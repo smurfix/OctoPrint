@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
@@ -33,7 +30,7 @@ def _git(args, cwd, hide_stderr=False):
                 stderr=(subprocess.PIPE if hide_stderr else None),
             )
             break
-        except EnvironmentError:
+        except OSError:
             e = sys.exc_info()[1]
             if e.errno == errno.ENOENT:
                 continue
@@ -41,9 +38,7 @@ def _git(args, cwd, hide_stderr=False):
     else:
         return None, None
 
-    stdout = p.communicate()[0].strip()
-    if sys.version >= "3":
-        stdout = stdout.decode()
+    stdout = p.communicate()[0].strip().decode()
 
     if p.returncode != 0:
         return p.returncode, None
@@ -100,8 +95,6 @@ def get_latest(target, check, online=True, *args, **kwargs):
     logger = logging.getLogger(
         "octoprint.plugins.softwareupdate.version_checks.git_commit"
     )
-    logger.debug(
-        "Target: {}, local: {}, remote: {}".format(target, local_commit, remote_commit)
-    )
+    logger.debug(f"Target: {target}, local: {local_commit}, remote: {remote_commit}")
 
     return information, is_current

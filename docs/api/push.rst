@@ -30,7 +30,7 @@ following message types are currently available for usage by 3rd party clients:
   * ``connected``: Initial connection information, sent only right after establishing the socket connection. See
     :ref:`the payload data model <sec-api-push-datamodel-connected>`.
   * ``reauthRequired``: A reauthentication of the current login session is required. The ``reason`` parameter in the
-    payload defines whether a full active login is necessary (values ``logout`` and ``removed``) or a simple passive
+    payload defines whether a full active login is necessary (values ``logout``, ``stale``, ``removed``) or a simple passive
     login will suffice (all other values).
   * ``current``: Rate limited general state update, payload contains information about the printer's state, job progress,
     accumulated temperature points and log lines since last update. OctoPrint will send these updates when new information
@@ -50,7 +50,70 @@ Clients must ignore any unknown messages.
 
 The data model of the attached payloads is described further below.
 
-OctoPrint's SockJS socket also accepts two commands from the client to the server.
+OctoPrint's SockJS socket also accepts three commands from the client to the server.
+
+  * ``subscribe`` (since 1.8.0): With the ``subscribe`` message, clients may selectively
+    subscribe to certain message types. The payload should be a dict of message types with
+    supported keys as follows:
+
+    * ``state``: Either a boolean value indicating whether to generally receive state updates (``current`` and ``history``)
+      or not, or a dict with further options for received state updates. Currently the following options are recognized here:
+
+      * ``logs``: A boolean value whether to include all log lines (``True``, default) or not (``False``). Alternatively a string with
+        a regex pattern can be provided, in which case only log lines matching the pattern will be returned.
+      * ``messages``: Like ``logs`` but for the returned message lines.
+
+    * ``plugins``: Either a boolean value indicating whether to generally receive plugin messages, or a list of plugin
+      identifiers to receive plugin messages for.
+    * ``events``: Either a boolean value indicating whether to generally receive event messages, or a list of event
+      types to receive event messages for.
+
+    If you send a ``subscribe`` message, OctoPrint will default the connection to not subscribe you to anything you did't explicitly
+    request. ``subscribe`` messages do replace previous ones.
+
+    Example for a ``subscribe`` message subscribing only to updates from plugin ``example`` but neither state nor events:
+
+    .. sourcecode:: javascript
+
+       {
+         "subscribe": {
+           "plugins": ["example"]
+         }
+       }
+
+    Example for a ``subscribe`` message subscribing to state, event and plugin updates,
+    but filtering logs in state updates to only contain lines matching ``^Recv: Cap`` and also
+    filtering out all messages:
+
+    .. sourcecode:: javascript
+
+       {
+         "subscribe": {
+           "state": {
+             "logs": "^Recv: Cap",
+             "messages": false
+           },
+           "events": true,
+           "plugins": true
+         }
+       }
+
+    Example for a ``subscribe`` message subscribing only to events of type ``PrintFailed``:
+
+    .. sourcecode:: javascript
+
+       {
+         "subscribe": {
+           "events": ["PrintFailed"]
+         }
+       }
+
+    .. note::
+
+       Per default, OctoPrint will subscribe connecting clients to all state, event and plugin updates
+       without any filtering in place. If you wish to have your more selective subscription active
+       right from the start of your socket session, be sure to send the ``subscribe`` message
+       **before** the ``auth`` message.
 
   * ``auth`` (since 1.3.10): With the ``auth`` message, clients may associate an
     existing user session with the socket. That is of special importance to receive
