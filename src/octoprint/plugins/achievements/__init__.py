@@ -317,6 +317,7 @@ class AchievementsPlugin(
         elif event == Events.FILE_ADDED:
             if payload.get("operation") == "add":
                 self._data.stats.files_uploaded += 1
+                self._data.state.consecutive_prints_of_same_file = 0
                 self._year_data.files_uploaded += 1
 
                 if self._data.stats.files_uploaded >= 1000:
